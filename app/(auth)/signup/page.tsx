@@ -31,6 +31,7 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isLoading) return
     setError(null)
     setSuccess(null)
 
@@ -39,22 +40,37 @@ export default function SignupPage() {
       return
     }
 
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long")
+      return
+    }
+
     setIsLoading(true)
 
     try {
       const { error } = await signUp(email, password, fullName)
       if (error) {
-        setError(error.message)
+        if (error.message.includes("User already registered")) {
+          setError("An account with this email already exists")
+        } else if (error.message.includes("Database error")) {
+          setError("Failed to create user in database. Please try again or contact support.")
+        } else if (error.message.includes("Invalid")) {
+          setError("Invalid email or password format")
+        } else {
+          setError(error.message || "Failed to sign up")
+        }
       } else {
-        setSuccess("Account created successfully! Please check your email for verification.")
+        setSuccess("Account created successfully! Redirecting to dashboard...")
         // Clear form
         setFullName("")
         setEmail("")
         setPassword("")
         setConfirmPassword("")
+        // Redirect after a short delay to show success message
+        setTimeout(() => router.push("/dashboard"), 2000)
       }
     } catch (err) {
-      setError("An unexpected error occurred")
+      setError("An unexpected error occurred. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -73,8 +89,8 @@ export default function SignupPage() {
               <Alert>
                 <AlertDescription>{success}</AlertDescription>
               </Alert>
-              <Button onClick={() => router.push("/login")} className="w-full">
-                Go to Login
+              <Button onClick={() => router.push("/dashboard")} className="w-full">
+                Go to Dashboard
               </Button>
             </div>
           ) : (
@@ -92,6 +108,7 @@ export default function SignupPage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               <div className="space-y-2">
@@ -103,6 +120,7 @@ export default function SignupPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               <div className="space-y-2">
@@ -113,6 +131,7 @@ export default function SignupPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               <div className="space-y-2">
@@ -123,6 +142,7 @@ export default function SignupPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               <Button type="submit" className="w-full" disabled={isLoading}>
