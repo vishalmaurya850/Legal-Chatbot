@@ -5,7 +5,7 @@ import { Avatar } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { ThumbsUp, ThumbsDown, FileText, ImageIcon, Paperclip } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { getSupabaseClient } from "@/lib/supabase/client"
 
 type Attachment = {
   id: string
@@ -30,7 +30,7 @@ type ChatMessageProps = {
 export function ChatMessage({ message, onFeedback }: ChatMessageProps) {
   const [feedbackGiven, setFeedbackGiven] = useState<"positive" | "negative" | null>(null)
   const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({})
-  const supabase = createClient()
+  const supabase = getSupabaseClient()
 
   const handleFeedback = (isPositive: boolean) => {
     if (feedbackGiven) return

@@ -3,10 +3,10 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
 
 export default async function HomePage() {
-  const supabase = createServerSupabaseClient(cookies())
+  const supabase = await createServerSupabaseClient()
 
   // Validate user with getUser()
-  const { data: userData, error: userError } = await supabase.auth.getUser()
+  const { data: userData, error: userError } = await (await supabase).auth.getUser()
   if (userError) {
     console.error("Error validating user:", userError)
     redirect("/login")

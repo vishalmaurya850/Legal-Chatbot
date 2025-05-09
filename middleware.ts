@@ -1,137 +1,102 @@
-import { createServerClient } from "@supabase/ssr";
-import { type NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr"
+import { type NextRequest, NextResponse } from "next/server"
 
 export async function middleware(req: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request: {
-      headers: req.headers,
-    },
-  });
+  const res = NextResponse.next()
 
+  // Create a Supabase client
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return req.cookies.getAll();
+        get(name) {
+          return req.cookies.get(name)?.value
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => req.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({
-            request: req,
-          });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+        set(name, value, options) {
+          res.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+        },
+        remove(name, options) {
+          res.cookies.set({
+            name,
+            value: "",
+            ...options,
+          })
         },
       },
+    },
+  )
+
+  try {
+    // Refresh the session
+    await supabase.auth.getSession()
+
+    // Get the session - this will use the cookies automatically
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    // Define protected and auth routes
+    const isProtectedRoute =
+      req.nextUrl.pathname.startsWith("/dashboard") ||
+      req.nextUrl.pathname.startsWith("/chat") ||
+      req.nextUrl.pathname.startsWith("/documents") ||
+      req.nextUrl.pathname.startsWith("/settings") ||
+      req.nextUrl.pathname.startsWith("/legal-help") ||
+      req.nextUrl.pathname.startsWith("/lawyers")
+
+    const isAuthRoute =
+      req.nextUrl.pathname === "/login" ||
+      req.nextUrl.pathname === "/signup" ||
+      req.nextUrl.pathname === "/forgot-password" ||
+      req.nextUrl.pathname === "/reset-password"
+
+    // Skip middleware for public routes and API routes
+    const isPublicRoute =
+      req.nextUrl.pathname === "/" ||
+      req.nextUrl.pathname.startsWith("/public") ||
+      req.nextUrl.pathname.startsWith("/_next") ||
+      req.nextUrl.pathname.startsWith("/favicon.ico")
+
+    // Skip middleware for API routes
+    const isApiRoute = req.nextUrl.pathname.startsWith("/api/")
+
+    if (isPublicRoute || isApiRoute) {
+      return res
     }
-  );
 
-  // Decode the `legal-chatbot-auth` cookie if it exists
-  const authCookie = req.cookies.get("legal-chatbot-auth");
-  if (authCookie) {
-    try {
-      const decodedAuth = JSON.parse(Buffer.from(authCookie.value.split("base64-")[1], "base64").toString());
-      console.log("Decoded auth cookie:", decodedAuth);
+    // Debug information
+    console.log("Middleware check:", {
+      path: req.nextUrl.pathname,
+      hasSession: !!session,
+      isProtectedRoute,
+      isAuthRoute,
+    })
 
-      if (decodedAuth.access_token) {
-        await supabase.auth.setSession({
-          access_token: decodedAuth.access_token,
-          refresh_token: decodedAuth.refresh_token,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to decode auth cookie:", error);
+    // Redirect logic
+    if (isProtectedRoute && !session) {
+      const redirectUrl = new URL("/login", req.url)
+      redirectUrl.searchParams.set("redirect", req.nextUrl.pathname)
+      return NextResponse.redirect(redirectUrl)
     }
-  }
 
-  // Get the session to check if a session exists
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-
-  if (sessionError) {
-    console.error("Error getting session:", sessionError);
-  }
-
-  // Refresh session if expired
-  if (!session && authCookie) {
-    const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
-    if (refreshError) {
-      console.error("Error refreshing session:", refreshError);
-    } else {
-      console.log("Refreshed session in middleware:", refreshedSession);
+    if (isAuthRoute && session) {
+      return NextResponse.redirect(new URL("/dashboard", req.url))
     }
+
+    return res
+  } catch (error) {
+    console.error("Middleware error:", error)
+    // If there's an error in the middleware, allow the request to continue
+    // This prevents authentication errors from blocking the entire application
+    return res
   }
-
-  // Validate user with getUser()
-  let user = null;
-  if (session) {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError) {
-      console.error("Error validating user:", userError);
-    } else {
-      user = userData.user;
-    }
-  }
-
-  // Check if the user exists in the users table
-  if (user) {
-    const { data: userRecord, error: userRecordError } = await supabase
-      .from("users")
-      .select("id")
-      .eq("id", user.id)
-      .single();
-
-    if (userRecordError || !userRecord) {
-      console.error("User not found in users table:", userRecordError || "No user record");
-      // Create a user record if missing
-      const { error: insertError } = await supabase.from("users").insert({
-        id: user.id,
-        full_name: user.user_metadata.full_name || "Unknown",
-      });
-
-      if (insertError) {
-        console.error("Error creating user record:", insertError);
-        return NextResponse.redirect(new URL("/error?message=user-not-found", req.url));
-      }
-    }
-  }
-
-  // Check if the request is for a protected route
-  const isProtectedRoute =
-    req.nextUrl.pathname.startsWith("/dashboard") ||
-    req.nextUrl.pathname.startsWith("/chat") ||
-    req.nextUrl.pathname.startsWith("/documents") ||
-    req.nextUrl.pathname.startsWith("/settings");
-
-  // Check if the request is for an auth route
-  const isAuthRoute =
-    req.nextUrl.pathname.startsWith("/login") ||
-    req.nextUrl.pathname.startsWith("/signup") ||
-    req.nextUrl.pathname.startsWith("/forgot-password") ||
-    req.nextUrl.pathname.startsWith("/reset-password");
-
-  // Redirect if accessing protected route without a valid user
-  if (isProtectedRoute && !user) {
-    const redirectUrl = new URL("/login", req.url);
-    redirectUrl.searchParams.set("redirect", req.nextUrl.pathname);
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  // Redirect if accessing auth route with a valid user
-  if (isAuthRoute && user) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-
-  return supabaseResponse;
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|public|api/public).*)",
-  ],
-};
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+}

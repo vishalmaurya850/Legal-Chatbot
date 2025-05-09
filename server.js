@@ -52,8 +52,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 // Initialize OpenAI embeddings
 const embeddings = new MistralAIEmbeddings({
-apiKey:process.env.MISTRAL_API_KEY,
-model: "mistral-embed",
+  apiKey: process.env.MISTRAL_API_KEY,
+  model: "mistral-embed",
+  dimensions: 1024,
 })
 
 // Route for uploading and processing PDF

@@ -5,15 +5,15 @@ import { cookies } from "next/headers"
 
 export async function POST(request: Request) {
   try {
-    const supabase = createServerSupabaseClient(cookies())
+    const supabase = await createServerSupabaseClient()
 
     // Validate user with getUser()
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await (await supabase).auth.getUser()
     if (userError || !userData.user) {
       console.error("Error validating user:", userError)
-      if (userError?.message.includes("Auth session missing")) {
-        return NextResponse.json({ error: "Unauthorized: Session missing" }, { status: 401 })
-      }
+      // if (userError?.message.includes("Auth session missing")) {
+      //   return NextResponse.json({ error: "Unauthorized: Session missing" }, { status: 401 })
+      // }
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
     if (containsSensitiveContent) {
       // Save user message
-      const { error: userMessageError } = await supabase.from("messages").insert({
+      const { error: userMessageError } = await (await supabase).from("messages").insert({
         chat_session_id: chatId,
         user_id: userId,
         content: message,

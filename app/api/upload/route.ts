@@ -4,10 +4,10 @@ import { cookies } from "next/headers"
 
 export async function POST(request: Request) {
   try {
-    const supabase = createServerSupabaseClient(cookies())
+    const supabase = await createServerSupabaseClient()
 
     // Validate user with getUser()
-    const { data: userData, error: userError } = await supabase.auth.getUser()
+    const { data: userData, error: userError } = await (await supabase).auth.getUser()
     if (userError || !userData.user) {
       console.error("Error validating user:", userError)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     const fileName = `${userData.user.id}/${messageId}/${Math.random().toString(36).substring(2)}.${fileExt}`
     const filePath = `attachments/${fileName}`
 
-    const { error: uploadError } = await supabase.storage.from("attachments").upload(filePath, file)
+    const { error: uploadError } = await (await supabase).storage.from("attachments").upload(filePath, file)
 
     if (uploadError) {
       console.error("Error uploading file:", uploadError)

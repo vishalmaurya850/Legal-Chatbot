@@ -12,10 +12,10 @@ export default async function DocumentPage({
 }: {
   params: { id: string }
 }) {
-  const supabase = createServerSupabaseClient(cookies())
+  const supabase = await createServerSupabaseClient()
 
   // Validate user with getUser()
-  const { data: userData, error: userError } = await supabase.auth.getUser()
+  const { data: userData, error: userError } = await (await supabase).auth.getUser()
   if (userError || !userData.user) {
     console.error("Error validating user:", userError)
     notFound()

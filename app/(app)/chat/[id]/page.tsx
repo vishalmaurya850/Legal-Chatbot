@@ -8,13 +8,13 @@ export default async function ChatSessionPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const supabase = createServerSupabaseClient(cookies())
+  const supabase = await createServerSupabaseClient()
 
   // Await params to access id
   const { id } = await params
 
   // Validate user with getUser()
-  const { data: userData, error: userError } = await supabase.auth.getUser()
+  const { data: userData, error: userError } = await (await supabase).auth.getUser()
   if (userError || !userData.user) {
     console.error("Error validating user:", userError)
     notFound()

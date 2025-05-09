@@ -1,22 +1,17 @@
-"use client";
+"use client"
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useAuth } from "@/contexts/auth-context";
-import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { User, LogOut, Settings, Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { User, LogOut, Settings, Moon, Sun, Scale, MessageSquare, FileText } from "lucide-react"
+import { useTheme } from "next-themes"
 
 export function Navbar() {
-  const { user, signOut } = useAuth();
-  const pathname = usePathname();
-  const { theme, setTheme, resolvedTheme } = useTheme();
-
-  // Delay rendering until the theme is resolved
-  if (!resolvedTheme) {
-    return null;
-  }
+  const { user, signOut } = useAuth()
+  const pathname = usePathname()
+  const { theme, setTheme } = useTheme()
 
   return (
     <header className="border-b bg-background">
@@ -40,7 +35,8 @@ export function Navbar() {
                 pathname === "/chat" || pathname.startsWith("/chat/") ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              Chat
+              <MessageSquare className="inline-block h-4 w-4 mr-1" />
+              AI Chat
             </Link>
             <Link
               href="/documents"
@@ -50,7 +46,17 @@ export function Navbar() {
                   : "text-muted-foreground"
               }`}
             >
+              <FileText className="inline-block h-4 w-4 mr-1" />
               Documents
+            </Link>
+            <Link
+              href="/legal-help/dashboard"
+              className={`text-sm font-medium transition-colors hover:text-primary ${
+                pathname.startsWith("/legal-help") ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <Scale className="inline-block h-4 w-4 mr-1" />
+              Legal Help
             </Link>
           </nav>
         </div>
@@ -73,12 +79,18 @@ export function Navbar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem className="font-medium">
-                  Hi, {user.user_metadata.full_name || "User"}
+                  Hi, {user.user_metadata?.full_name || "User"}
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/settings">
                     <Settings className="mr-2 h-4 w-4" />
                     <span>Settings</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/lawyers/dashboard">
+                    <Scale className="mr-2 h-4 w-4" />
+                    <span>Lawyer Dashboard</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => signOut()}>
@@ -91,5 +103,5 @@ export function Navbar() {
         </div>
       </div>
     </header>
-  );
+  )
 }

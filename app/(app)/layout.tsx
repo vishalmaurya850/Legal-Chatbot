@@ -3,41 +3,50 @@ import { redirect } from "next/navigation"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { Navbar } from "@/components/navbar"
 import { Sidebar } from "@/components/sidebar"
-import { cookies } from "next/headers"
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = createServerSupabaseClient(cookies())
+  const supabase = await createServerSupabaseClient()
 
-  // Validate user with getUser()
-  const { data: userData, error: userError } = await supabase.auth.getUser()
-  if (userError || !userData.user) {
-    console.error("Error validating user:", userError)
-    redirect("/login")
-  }
+  try {
+    // Get the session
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession()
 
-  // Verify user exists in users table
-  const { data: userRecord, error: userRecordError } = await supabase
-    .from("users")
-    .select("id")
-    .eq("id", userData.user.id)
-    .single()
+    if (error) {
+      console.error("Error getting session in app layout:", error)
+      redirect("/login")
+    }
 
-  if (userRecordError || !userRecord) {
-    console.error("User not found in users table:", userRecordError)
-    redirect("/login")
-  }
+    if (!session) {
+      console.log("No session found in app layout, redirecting to login")
+      redirect("/login")
+    }
 
-  return (
-    <div className="flex h-screen">
-      <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <Navbar />
-        <main className="flex-1 overflow-auto p-4">{children}</main>
+    // Verify the user exists
+    const { data: userData, error: userError } = await supabase.auth.getUser()
+
+    if (userError || !userData.user) {
+      console.error("Error getting user in app layout:", userError)
+      redirect("/login")
+    }
+
+    return (
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <Navbar />
+          <main className="flex-1 overflow-auto p-4">{children}</main>
+        </div>
       </div>
-    </div>
-  )
+    )
+  } catch (error) {
+    console.error("Error in app layout:", error)
+    redirect("/login")
+  }
 }

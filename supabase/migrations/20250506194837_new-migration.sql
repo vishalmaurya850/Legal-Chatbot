@@ -299,3 +299,242 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.feedback TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_documents TO authenticated;
 GRANT SELECT ON public.constitution_embeddings TO authenticated;
 GRANT SELECT ON public.document_embeddings TO authenticated;
+
+-- Lawyers table
+CREATE TABLE IF NOT EXISTS public.lawyers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  phone TEXT,
+  specialization TEXT NOT NULL,
+  experience_years INTEGER NOT NULL,
+  bio TEXT,
+  address TEXT NOT NULL,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  country TEXT NOT NULL,
+  postal_code TEXT,
+  latitude FLOAT,
+  longitude FLOAT,
+  is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  is_available BOOLEAN NOT NULL DEFAULT TRUE,
+  rating FLOAT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Legal help requests table
+CREATE TABLE IF NOT EXISTS public.legal_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  legal_area TEXT NOT NULL,
+  urgency TEXT NOT NULL,
+  address TEXT NOT NULL,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  country TEXT NOT NULL,
+  postal_code TEXT,
+  latitude FLOAT,
+  longitude FLOAT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  assigned_lawyer_id UUID REFERENCES public.lawyers(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Lawyer-User matches table
+CREATE TABLE IF NOT EXISTS public.lawyer_matches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  legal_request_id UUID NOT NULL REFERENCES public.legal_requests(id) ON DELETE CASCADE,
+  lawyer_id UUID NOT NULL REFERENCES public.lawyers(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending', -- pending, accepted, rejected, completed
+  match_score FLOAT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(legal_request_id, lawyer_id)
+);
+
+-- Messages between lawyers and users
+CREATE TABLE IF NOT EXISTS public.lawyer_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  match_id UUID NOT NULL REFERENCES public.lawyer_matches(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_lawyers_user_id ON public.lawyers(user_id);
+CREATE INDEX IF NOT EXISTS idx_lawyers_specialization ON public.lawyers(specialization);
+CREATE INDEX IF NOT EXISTS idx_lawyers_location ON public.lawyers(city, state, country);
+CREATE INDEX IF NOT EXISTS idx_lawyers_is_available ON public.lawyers(is_available);
+
+CREATE INDEX IF NOT EXISTS idx_legal_requests_user_id ON public.legal_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_legal_requests_legal_area ON public.legal_requests(legal_area);
+CREATE INDEX IF NOT EXISTS idx_legal_requests_location ON public.legal_requests(city, state, country);
+CREATE INDEX IF NOT EXISTS idx_legal_requests_status ON public.legal_requests(status);
+
+CREATE INDEX IF NOT EXISTS idx_lawyer_matches_legal_request_id ON public.lawyer_matches(legal_request_id);
+CREATE INDEX IF NOT EXISTS idx_lawyer_matches_lawyer_id ON public.lawyer_matches(lawyer_id);
+CREATE INDEX IF NOT EXISTS idx_lawyer_matches_user_id ON public.lawyer_matches(user_id);
+CREATE INDEX IF NOT EXISTS idx_lawyer_matches_status ON public.lawyer_matches(status);
+
+CREATE INDEX IF NOT EXISTS idx_lawyer_messages_match_id ON public.lawyer_messages(match_id);
+CREATE INDEX IF NOT EXISTS idx_lawyer_messages_sender_id ON public.lawyer_messages(sender_id);
+
+-- Enable RLS on all tables
+ALTER TABLE public.lawyers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.legal_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lawyer_matches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lawyer_messages ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies
+CREATE POLICY lawyers_policy ON public.lawyers
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY lawyers_read_policy ON public.lawyers
+  FOR SELECT
+  USING (true);
+
+CREATE POLICY legal_requests_policy ON public.legal_requests
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY legal_requests_read_policy ON public.legal_requests
+  FOR SELECT
+  USING (auth.uid() = user_id OR auth.uid() IN (
+    SELECT user_id FROM public.lawyers WHERE id = legal_requests.assigned_lawyer_id
+  ));
+
+CREATE POLICY lawyer_matches_policy ON public.lawyer_matches
+  FOR ALL
+  USING (
+    auth.uid() = user_id OR 
+    auth.uid() IN (SELECT user_id FROM public.lawyers WHERE id = lawyer_matches.lawyer_id)
+  )
+  WITH CHECK (
+    auth.uid() = user_id OR 
+    auth.uid() IN (SELECT user_id FROM public.lawyers WHERE id = lawyer_matches.lawyer_id)
+  );
+
+CREATE POLICY lawyer_messages_policy ON public.lawyer_messages
+  FOR ALL
+  USING (
+    auth.uid() = sender_id OR 
+    auth.uid() IN (
+      SELECT user_id FROM public.lawyer_matches WHERE id = lawyer_messages.match_id
+      UNION
+      SELECT l.user_id FROM public.lawyers l
+      JOIN public.lawyer_matches m ON l.id = m.lawyer_id
+      WHERE m.id = lawyer_messages.match_id
+    )
+  )
+  WITH CHECK (auth.uid() = sender_id);
+
+-- Update the users table to include location information
+ALTER TABLE public.users 
+ADD COLUMN IF NOT EXISTS address TEXT,
+ADD COLUMN IF NOT EXISTS city TEXT,
+ADD COLUMN IF NOT EXISTS state TEXT,
+ADD COLUMN IF NOT EXISTS country TEXT,
+ADD COLUMN IF NOT EXISTS postal_code TEXT,
+ADD COLUMN IF NOT EXISTS latitude FLOAT,
+ADD COLUMN IF NOT EXISTS longitude FLOAT;
+
+-- Function to update timestamps
+CREATE OR REPLACE FUNCTION update_lawyer_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_lawyers_updated_at
+  BEFORE UPDATE ON public.lawyers
+  FOR EACH ROW EXECUTE FUNCTION update_lawyer_updated_at();
+
+CREATE TRIGGER update_legal_requests_updated_at
+  BEFORE UPDATE ON public.legal_requests
+  FOR EACH ROW EXECUTE FUNCTION update_lawyer_updated_at();
+
+CREATE TRIGGER update_lawyer_matches_updated_at
+  BEFORE UPDATE ON public.lawyer_matches
+  FOR EACH ROW EXECUTE FUNCTION update_lawyer_updated_at();
+
+-- Function to calculate distance between two points
+CREATE OR REPLACE FUNCTION calculate_distance(lat1 FLOAT, lon1 FLOAT, lat2 FLOAT, lon2 FLOAT)
+RETURNS FLOAT AS $$
+DECLARE
+  R FLOAT := 6371; -- Radius of the earth in km
+  dLat FLOAT;
+  dLon FLOAT;
+  a FLOAT;
+  c FLOAT;
+  d FLOAT;
+BEGIN
+  dLat := radians(lat2 - lat1);
+  dLon := radians(lon2 - lon1);
+  a := sin(dLat/2) * sin(dLat/2) + cos(radians(lat1)) * cos(radians(lat2)) * sin(dLon/2) * sin(dLon/2);
+  c := 2 * atan2(sqrt(a), sqrt(1-a));
+  d := R * c; -- Distance in km
+  RETURN d;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to find nearby lawyers
+CREATE OR REPLACE FUNCTION find_nearby_lawyers(
+  request_id UUID,
+  max_distance FLOAT DEFAULT 50.0 -- Default 50km radius
+)
+RETURNS TABLE (
+  lawyer_id UUID,
+  distance FLOAT,
+  match_score FLOAT
+) AS $$
+DECLARE
+  req_lat FLOAT;
+  req_lon FLOAT;
+  req_area TEXT;
+BEGIN
+  -- Get request details
+  SELECT latitude, longitude, legal_area INTO req_lat, req_lon, req_area
+  FROM public.legal_requests
+  WHERE id = request_id;
+  
+  -- Return nearby lawyers with matching specialization
+  RETURN QUERY
+  SELECT 
+    l.id,
+    calculate_distance(req_lat, req_lon, l.latitude, l.longitude) AS distance,
+    CASE
+      WHEN l.specialization = req_area THEN 1.0
+      ELSE 0.5
+    END * (1.0 / (1.0 + calculate_distance(req_lat, req_lon, l.latitude, l.longitude) / 10.0)) AS match_score
+  FROM public.lawyers l
+  WHERE 
+    l.is_available = TRUE AND
+    l.is_verified = TRUE AND
+    calculate_distance(req_lat, req_lon, l.latitude, l.longitude) <= max_distance
+  ORDER BY match_score DESC;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Grant necessary permissions
+GRANT EXECUTE ON FUNCTION calculate_distance TO authenticated;
+GRANT EXECUTE ON FUNCTION find_nearby_lawyers TO authenticated;
+GRANT EXECUTE ON FUNCTION update_lawyer_updated_at TO authenticated;
+
+-- Grant table permissions
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.lawyers TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.legal_requests TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.lawyer_matches TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.lawyer_messages TO authenticated;

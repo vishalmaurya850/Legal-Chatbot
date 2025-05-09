@@ -1,16 +1,16 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useRef, useState, useCallback } from "react"
+
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { createClient } from "@/lib/supabase/client"
+import { getSupabaseClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Send, Paperclip, Loader2 } from "lucide-react"
 import { ChatMessage } from "@/components/chat-message"
-import { toast } from "@/components/ui/use-toast"
 
 type Message = {
   id: string
@@ -35,13 +35,10 @@ export function Chat({ chatId }: { chatId: string }) {
   const [files, setFiles] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const supabase = createClient()
+  const supabase = getSupabaseClient()
 
   useEffect(() => {
-    if (!user || !chatId) {
-      router.push("/login")
-      return
-    }
+    if (!user || !chatId) return
 
     const fetchMessages = async () => {
       setIsLoading(true)
@@ -53,7 +50,6 @@ export function Chat({ chatId }: { chatId: string }) {
         .single()
 
       if (chatError || !chatData) {
-        toast({ variant: "destructive", description: "Chat session not found" })
         router.push("/chat")
         return
       }
@@ -67,21 +63,15 @@ export function Chat({ chatId }: { chatId: string }) {
         .eq("chat_session_id", chatId)
         .order("created_at", { ascending: true })
 
-      if (messagesError) {
-        console.error("Error fetching messages:", messagesError)
-        toast({ variant: "destructive", description: "Failed to load messages" })
-      } else {
-        setMessages(messagesData || [])
+      if (!messagesError && messagesData) {
+        setMessages(messagesData)
       }
       setIsLoading(false)
     }
 
     fetchMessages()
-  }, [user, chatId, router, supabase])
 
-  useEffect(() => {
-    if (!user || !chatId) return
-
+    // Subscribe to new messages
     const subscription = supabase
       .channel(`messages:${chatId}`)
       .on(
@@ -92,17 +82,27 @@ export function Chat({ chatId }: { chatId: string }) {
           table: "messages",
           filter: `chat_session_id=eq.${chatId}`,
         },
-        (payload) => {
-          console.log("New message received:", payload)
-          setMessages((prev) => [...prev, payload.new as Message])
-        }
+        async (payload) => {
+          const { data: newMessage, error } = await supabase
+            .from("messages")
+            .select(`
+              *,
+              attachments (*)
+            `)
+            .eq("id", payload.new.id)
+            .single()
+
+          if (!error && newMessage) {
+            setMessages((prev) => [...prev, newMessage])
+          }
+        },
       )
       .subscribe()
 
     return () => {
-      supabase.removeChannel(subscription)
+      subscription.unsubscribe()
     }
-  }, [user, chatId, supabase])
+  }, [user, chatId, router, supabase])
 
   useEffect(() => {
     scrollToBottom()
@@ -112,89 +112,77 @@ export function Chat({ chatId }: { chatId: string }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
-  const handleSendMessage = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault()
-      if (!input.trim() && files.length === 0) return
-      if (!user || !chatId || isSending) return
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim() && files.length === 0) return
+    if (!user || !chatId) return
 
-      setIsSending(true)
+    setIsSending(true)
 
-      try {
-        // Upload files if any
-        let messageId: string | null = null
-        if (files.length > 0) {
-          const { data: messageData, error: messageError } = await supabase
-            .from("messages")
-            .insert({
-              chat_session_id: chatId,
-              user_id: user.id,
-              content: "Attached files",
-              is_bot: false,
-            })
-            .select()
-            .single()
+    try {
+      // Insert user message
+      const { data: messageData, error: messageError } = await supabase
+        .from("messages")
+        .insert({
+          chat_session_id: chatId,
+          user_id: user.id,
+          content: input.trim() || "Attached files",
+          is_bot: false,
+        })
+        .select()
+        .single()
 
-          if (messageError || !messageData) {
-            throw new Error("Failed to save message with attachments")
-          }
-
-          messageId = messageData.id
-
-          for (const file of files) {
-            const formData = new FormData()
-            formData.append("file", file)
-            if (messageId) {
-              formData.append("messageId", messageId)
-            } else {
-              throw new Error("Message ID is null")
-            }
-
-            const uploadResponse = await fetch("/api/upload", {
-              method: "POST",
-              body: formData,
-            })
-
-            if (!uploadResponse.ok) {
-              throw new Error("Failed to upload file")
-            }
-          }
-          setFiles([])
-        }
-
-        // Send message to API if there's text input
-        if (input.trim()) {
-          const response = await fetch("/api/chat", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              chatId,
-              message: input.trim(),
-              userId: user.id,
-            }),
-          })
-
-          if (!response.ok) {
-            const errorData = await response.json()
-            throw new Error(errorData.error || "Failed to get response from bot")
-          }
-
-          const { message: botMessage } = await response.json()
-          setMessages((prev) => [...prev, botMessage])
-        }
-
-        setInput("")
-      } catch (error) {
-        console.error("Error in chat flow:", error)
-        toast({ variant: "destructive", description: "Failed to send message" })
-      } finally {
+      if (messageError || !messageData) {
+        console.error("Error sending message:", messageError)
         setIsSending(false)
+        return
       }
-    },
-    [input, files, user, chatId, isSending, supabase]
-  )
+
+      // Upload files if any
+      if (files.length > 0) {
+        for (const file of files) {
+          const formData = new FormData()
+          formData.append("file", file)
+          formData.append("messageId", messageData.id)
+
+          await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          })
+        }
+        setFiles([])
+      }
+
+      setInput("")
+
+      // Call API to get bot response
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chatId,
+          message: input.trim(),
+          userId: user.id,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to get response from bot")
+      }
+
+      // Update chat title if it's the first message
+      if (messages.length === 0) {
+        const title = input.trim().substring(0, 30) + (input.trim().length > 30 ? "..." : "")
+        await supabase.from("chat_sessions").update({ title }).eq("id", chatId)
+      }
+    } catch (error) {
+      console.error("Error in chat flow:", error)
+    } finally {
+      setIsSending(false)
+    }
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -205,16 +193,11 @@ export function Chat({ chatId }: { chatId: string }) {
   const handleFeedback = async (messageId: string, isPositive: boolean) => {
     if (!user) return
 
-    const { error } = await supabase.from("feedback").insert({
+    await supabase.from("feedback").insert({
       message_id: messageId,
       user_id: user.id,
       rating: isPositive ? 5 : 1,
     })
-
-    if (error) {
-      console.error("Error submitting feedback:", error)
-      toast({ variant: "destructive", description: "Failed to submit feedback" })
-    }
   }
 
   return (
@@ -246,24 +229,11 @@ export function Chat({ chatId }: { chatId: string }) {
       <div className="border-t p-4">
         <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isSending}
-            >
+            <Button type="button" variant="outline" size="icon" onClick={() => fileInputRef.current?.click()}>
               <Paperclip className="h-4 w-4" />
               <span className="sr-only">Attach files</span>
             </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              multiple
-              disabled={isSending}
-            />
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" multiple />
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -271,7 +241,7 @@ export function Chat({ chatId }: { chatId: string }) {
               className="flex-1 min-h-[60px] resize-none"
               disabled={isSending}
             />
-            <Button type="submit" size="icon" disabled={isSending || (!input.trim() && files.length === 0)}>
+            <Button type="submit" size="icon" disabled={isSending}>
               {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               <span className="sr-only">Send</span>
             </Button>
@@ -290,9 +260,8 @@ export function Chat({ chatId }: { chatId: string }) {
                     size="sm"
                     className="h-4 w-4 p-0"
                     onClick={() => setFiles(files.filter((_, i) => i !== index))}
-                    disabled={isSending}
                   >
-                    ×
+                    &times;
                   </Button>
                 </div>
               ))}

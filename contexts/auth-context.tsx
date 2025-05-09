@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { getSupabaseClient } from "@/lib/supabase/client"
 import type { Session, User } from "@supabase/supabase-js"
 import { useRouter } from "next/navigation"
 
@@ -23,33 +23,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = getSupabaseClient()
 
   useEffect(() => {
     // Initialize auth state
     const initializeAuth = async () => {
       try {
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-        if (sessionError) {
-          console.error("Error getting session:", sessionError)
-          setIsLoading(false)
-          return
-        }
+        // First get the session
+        const { data: sessionData } = await supabase.auth.getSession()
+        setSession(sessionData.session)
 
+        // Then get the authenticated user
         if (sessionData.session) {
-          // Validate user with getUser()
-          const { data: userData, error: userError } = await supabase.auth.getUser()
-          if (userError) {
-            console.error("Error validating user:", userError)
-            setSession(null)
-            setUser(null)
-          } else {
-            setSession(sessionData.session)
-            setUser(userData.user)
-          }
+          const { data: userData } = await supabase.auth.getUser()
+          setUser(userData.user)
+        } else {
+          setUser(null)
         }
       } catch (error) {
         console.error("Error initializing auth:", error)
+        setUser(null)
+        setSession(null)
       } finally {
         setIsLoading(false)
       }
@@ -60,57 +54,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up auth state listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session)
-      if (session) {
-        // Validate user with getUser()
-        const { data: userData, error: userError } = await supabase.auth.getUser()
-        if (userError) {
-          console.error("Error validating user on auth state change:", userError)
-          setUser(null)
-        } else {
+    } = supabase.auth.onAuthStateChange(async (event: string, newSession: Session | null) => {
+      console.log("Auth state changed:", event, newSession?.user?.id)
+
+      setSession(newSession)
+
+      if (newSession) {
+        try {
+          const { data: userData } = await supabase.auth.getUser()
           setUser(userData.user)
+        } catch (error) {
+          console.error("Error getting user on auth state change:", error)
+          setUser(null)
         }
       } else {
         setUser(null)
       }
+
       setIsLoading(false)
+      router.refresh()
     })
 
     return () => {
       subscription.unsubscribe()
     }
-  }, [supabase])
+  }, [supabase, router])
 
   const signIn = async (email: string, password: string) => {
     try {
+      setIsLoading(true)
       const { error, data } = await supabase.auth.signInWithPassword({ email, password })
 
       if (!error && data.session) {
-        // Set auth cookie
-        const authCookie = `base64-${Buffer.from(
-          JSON.stringify({
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token,
-          })
-        ).toString("base64")}`
-        document.cookie = `legal-chatbot-auth=${authCookie}; path=/; secure; samesite=strict`
-
-        // Fetch session and user
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-        if (sessionError) {
-          console.error("Error getting session after sign-in:", sessionError)
-          return { error: sessionError }
-        }
-
-        const { data: userData, error: userError } = await supabase.auth.getUser()
-        if (userError) {
-          console.error("Error validating user after sign-in:", userError)
-          return { error: userError }
-        }
-
-        setSession(sessionData.session)
-        setUser(userData.user)
+        setUser(data.user)
+        setSession(data.session)
         router.refresh()
       }
 
@@ -118,11 +95,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Sign in error:", error)
       return { error }
+    } finally {
+      setIsLoading(false)
     }
   }
 
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
+      setIsLoading(true)
       const { error: signUpError, data } = await supabase.auth.signUp({
         email,
         password,
@@ -130,74 +110,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: {
             full_name: fullName,
           },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
 
       if (signUpError) {
-        console.error("Sign up error:", {
-          message: signUpError.message,
-          status: signUpError.status,
-          code: signUpError.code,
-          details: signUpError,
-        })
+        console.error("Sign up error:", signUpError)
         return { error: signUpError }
       }
 
+      // Handle case where session is null (e.g., email verification required)
       if (data.session) {
-        // Set auth cookie
-        const authCookie = `base64-${Buffer.from(
-          JSON.stringify({
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token,
-          })
-        ).toString("base64")}`
-        console.log("Setting auth cookie:", authCookie)
-        document.cookie = `legal-chatbot-auth=${authCookie}; path=/; secure; samesite=strict`
-
-        // Fetch session and user
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-        if (sessionError) {
-          console.error("Error getting session after sign-up:", sessionError)
-          return { error: sessionError }
-        }
-
-        const { data: userData, error: userError } = await supabase.auth.getUser()
-        if (userError) {
-          console.error("Error validating user after sign-up:", userError)
-          return { error: userError }
-        }
-
-        setSession(sessionData.session)
-        setUser(userData.user)
+        setUser(data.user)
+        setSession(data.session)
         router.refresh()
       } else {
-        console.log("No session returned, email verification may be required")
+        console.log("No session returned from signUp, likely due to email verification")
+        setSession(null)
+        setUser(null)
       }
 
       return { error: null }
     } catch (error: any) {
-      console.error("Unexpected error during sign up:", {
-        message: error.message,
-        stack: error.stack,
-        details: error,
-      })
+      console.error("Unexpected error during sign up:", error)
       return { error: error.message || "Failed to sign up" }
+    } finally {
+      setIsLoading(false)
     }
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-    setSession(null)
-    router.push("/login")
-    router.refresh()
+    try {
+      setIsLoading(true)
+      await supabase.auth.signOut()
+      setUser(null)
+      setSession(null)
+      router.push("/login")
+      router.refresh()
+    } catch (error) {
+      console.error("Sign out error:", error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
-    return { error }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      return { error }
+    } catch (error) {
+      console.error("Reset password error:", error)
+      return { error }
+    }
   }
 
   const value = {

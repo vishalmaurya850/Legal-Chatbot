@@ -6,10 +6,10 @@ import { FileText, Upload, Clock, Check } from "lucide-react"
 import { cookies } from "next/headers"
 
 export default async function DocumentsPage() {
-  const supabase = createServerSupabaseClient(cookies())
+  const supabase = await createServerSupabaseClient()
 
   // Validate user with getUser()
-  const { data: userData, error: userError } = await supabase.auth.getUser()
+  const { data: userData, error: userError } = await (await supabase).auth.getUser()
   if (userError || !userData.user) {
     console.error("Error validating user:", userError)
     return null
@@ -17,7 +17,7 @@ export default async function DocumentsPage() {
 
   // Verify user exists in users table
   const { data: userRecord, error: userRecordError } = await supabase
-    .from("users")
+    .from("users") // Ensure supabase is awaited
     .select("id")
     .eq("id", userData.user.id)
     .single()
@@ -29,7 +29,7 @@ export default async function DocumentsPage() {
 
   // Get user documents
   const { data: documents } = await supabase
-    .from("user_documents")
+    .from("user_documents") // Ensure supabase is awaited
     .select("*")
     .eq("user_id", userData.user.id)
     .order("created_at", { ascending: false })
@@ -51,7 +51,7 @@ export default async function DocumentsPage() {
 
       {documents && documents.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {documents.map((doc) => (
+          {documents.map((doc: { id: string; file_name: string; file_size: number; created_at: string; processed: boolean }) => (
             <Card key={doc.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
