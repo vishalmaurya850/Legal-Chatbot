@@ -8,7 +8,7 @@ import { getSupabaseClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { MessageSquare, FileText, Settings, PlusCircle, Scale, UserPlus, Users } from "lucide-react"
+import { MessageSquare, LayoutDashboard, FileText, Settings, PlusCircle, Scale, UserPlus, Users } from "lucide-react"
 import { DeleteChatButton } from "@/components/delete-chat-button"
 
 export function Sidebar() {
@@ -97,7 +97,7 @@ export function Sidebar() {
                 isActive("/dashboard") ? "bg-sky-100 text-sky-700" : "text-gray-700 hover:text-sky-700"
               }`}
             >
-              <MessageSquare className="mr-2 h-4 w-4" />
+              <LayoutDashboard className="mr-2 h-4 w-4" />
               Dashboard
             </Button>
           </Link>

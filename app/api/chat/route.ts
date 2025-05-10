@@ -58,7 +58,7 @@ Answer in a helpful, professional manner. Format your response using markdown fo
     }
 
     // Generate response using Gemini
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    const model = genAI.getGenerativeModel({ model: "models/gemini-2.5-pro-exp-03-25" })
     const result = await model.generateContent(prompt)
     const response = result.response
     const botResponse = response.text()
