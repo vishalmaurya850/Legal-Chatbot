@@ -4,102 +4,118 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { User, LogOut, Settings, Moon, Sun, Scale, MessageSquare, FileText } from "lucide-react"
-import { useTheme } from "next-themes"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { LogOut, User, Settings, HelpCircle } from "lucide-react"
 
 export function Navbar() {
   const { user, signOut } = useAuth()
   const pathname = usePathname()
-  const { theme, setTheme } = useTheme()
+
+  // Get initials from user's email
+  const getInitials = () => {
+    if (!user?.email) return "U"
+    return user.email
+      .split("@")[0]
+      .split(".")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2)
+  }
 
   return (
-    <header className="border-b bg-background">
-      <div className="flex h-16 items-center px-4">
-        <div className="flex items-center gap-4 md:gap-8">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold">Legal Chatbot</span>
+    <header className="sticky top-0 z-30 flex h-16 items-center border-b border-sky-100 bg-white px-4 md:px-6">
+      <div className="flex flex-1 items-center justify-between">
+        <div className="flex items-center">
+          <Link href="/dashboard" className="flex items-center">
+            <h1 className="ml-10 md:ml-0 text-xl font-bold text-sky-700">VIDHI 7</h1>
           </Link>
-          <nav className="hidden md:flex gap-6">
-            <Link
-              href="/dashboard"
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                pathname === "/dashboard" ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/chat"
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                pathname === "/chat" || pathname.startsWith("/chat/") ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <MessageSquare className="inline-block h-4 w-4 mr-1" />
-              AI Chat
-            </Link>
-            <Link
-              href="/documents"
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                pathname === "/documents" || pathname.startsWith("/documents/")
-                  ? "text-primary"
-                  : "text-muted-foreground"
-              }`}
-            >
-              <FileText className="inline-block h-4 w-4 mr-1" />
-              Documents
-            </Link>
-            <Link
-              href="/legal-help/dashboard"
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                pathname.startsWith("/legal-help") ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <Scale className="inline-block h-4 w-4 mr-1" />
-              Legal Help
-            </Link>
-          </nav>
         </div>
-        <div className="ml-auto flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            aria-label="Toggle theme"
-          >
-            {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </Button>
 
-          {user && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <User className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem className="font-medium">
-                  Hi, {user.user_metadata?.full_name || "User"}
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/settings">
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/lawyers/dashboard">
-                    <Scale className="mr-2 h-4 w-4" />
-                    <span>Lawyer Dashboard</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => signOut()}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+        <div className="flex items-center gap-2">
+          <div className="hidden md:flex md:items-center md:gap-4">
+            <Link href="/chat">
+              <Button
+                variant={pathname.startsWith("/chat") ? "default" : "ghost"}
+                className={
+                  pathname.startsWith("/chat") ? "bg-sky-600 hover:bg-sky-700" : "text-gray-700 hover:text-sky-700"
+                }
+              >
+                AI Chat
+              </Button>
+            </Link>
+            <Link href="/documents">
+              <Button
+                variant={pathname.startsWith("/documents") ? "default" : "ghost"}
+                className={
+                  pathname.startsWith("/documents") ? "bg-sky-600 hover:bg-sky-700" : "text-gray-700 hover:text-sky-700"
+                }
+              >
+                Documents
+              </Button>
+            </Link>
+            <Link href="/legal-help/dashboard">
+              <Button
+                variant={pathname.startsWith("/legal-help") ? "default" : "ghost"}
+                className={
+                  pathname.startsWith("/legal-help")
+                    ? "bg-sky-600 hover:bg-sky-700"
+                    : "text-gray-700 hover:text-sky-700"
+                }
+              >
+                Legal Help
+              </Button>
+            </Link>
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                <Avatar className="h-10 w-10 border border-sky-200">
+                  <AvatarImage src={user?.user_metadata?.avatar_url || ""} alt={user?.email || "User"} />
+                  <AvatarFallback className="bg-sky-100 text-sky-700">{getInitials()}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/settings" className="flex w-full cursor-pointer items-center">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings" className="flex w-full cursor-pointer items-center">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/help" className="flex w-full cursor-pointer items-center">
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  Help
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="flex cursor-pointer items-center text-red-600 focus:text-red-600"
+                onClick={() => signOut()}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>

@@ -70,12 +70,12 @@ export async function middleware(req: NextRequest) {
     }
 
     // Debug information
-    console.log("Middleware check:", {
-      path: req.nextUrl.pathname,
-      hasSession: !!session,
-      isProtectedRoute,
-      isAuthRoute,
-    })
+    // console.log("Middleware check:", {
+    //   path: req.nextUrl.pathname,
+    //   hasSession: !!session,
+    //   isProtectedRoute,
+    //   isAuthRoute,
+    // })
 
     // Redirect logic
     if (isProtectedRoute && !session) {

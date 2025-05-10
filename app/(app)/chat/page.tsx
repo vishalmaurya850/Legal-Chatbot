@@ -1,74 +1,49 @@
-import { redirect } from "next/navigation"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { Button } from "@/components/ui/button"
-import { PlusCircle } from "lucide-react"
-import { cookies } from "next/headers"
+"use client"
 
-export default async function ChatPage() {
-  const supabase = await createServerSupabaseClient()
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
+import { getSupabaseClient } from "@/lib/supabase/client"
+import { Chat } from "@/components/chat"
 
-  // Validate user with getUser()
-  const { data: userData, error: userError } = await (await supabase).auth.getUser()
-  if (userError || !userData.user) {
-    console.error("Error validating user:", userError)
-    redirect("/login")
-  }
+export default function ChatPage() {
+  const { user } = useAuth()
+  const router = useRouter()
+  const supabase = getSupabaseClient()
 
-  // Verify user exists in users table
-  const { data: userRecord, error: userRecordError } = await supabase
-    .from("users")
-    .select("id")
-    .eq("id", userData.user.id)
-    .single()
+  useEffect(() => {
+    if (!user) return
 
-  if (userRecordError || !userRecord) {
-    console.error("User not found in users table:", userRecordError)
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Error</h1>
-          <p className="text-muted-foreground mb-6">User not found. Please try again later.</p>
-        </div>
-      </div>
-    )
-  }
+    const createNewChat = async () => {
+      try {
+        // Check if there are any existing chats
+        const { data: existingChats, error: fetchError } = await supabase
+          .from("chat_sessions")
+          .select("id")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
 
-  // Create a new chat session
-  const { data, error } = await supabase
-    .from("chat_sessions")
-    .insert({
-      user_id: userData.user.id,
-      title: "New Chat",
-    })
-    .select()
-    .single()
+        if (fetchError) throw fetchError
 
-  if (error) {
-    console.error("Error creating chat session:", error)
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Error</h1>
-          <p className="text-muted-foreground mb-6">Failed to create a new chat session. Please try again.</p>
-        </div>
-      </div>
-    )
-  }
+        // If there are existing chats, redirect to the most recent one
+        if (existingChats && existingChats.length > 0) {
+          router.push(`/chat/${existingChats[0].id}`)
+          return
+        }
 
-  if (data) {
-    redirect(`/chat/${data.id}`)
-  }
+        // Otherwise, stay on the "new" chat page
+      } catch (error) {
+        console.error("Error checking for existing chats:", error)
+      }
+    }
+
+    createNewChat()
+  }, [user, router, supabase])
 
   return (
-    <div className="flex h-full items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold mb-4">Start a New Chat</h1>
-        <p className="text-muted-foreground mb-6">Ask any question about the Indian Constitution</p>
-        <Button disabled={true} size="lg">
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Creating new chat...
-        </Button>
-      </div>
+    <div className="h-full">
+      <Chat chatId="new" />
     </div>
   )
 }

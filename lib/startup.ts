@@ -1,11 +1,11 @@
-import { processConstitution } from "@/scripts/process-constitution"
+import { processMultiplePDFs } from "@/scripts/process-constitution"
 
-export async function runStartupTasks() {
+export async function runStartupTasks(): Promise<void> {
   console.log("Running startup tasks...")
 
   try {
-    // Process the Indian Constitution PDF
-    await processConstitution()
+    // Process multiple PDFs
+    await processMultiplePDFs()
   } catch (error) {
     console.error("Error running startup tasks:", error)
   }

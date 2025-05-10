@@ -1,15 +1,17 @@
 import type React from "react"
-import "./globals.css"
+import type { Metadata } from "next"
 import { Inter } from "next/font/google"
-import { AuthProvider } from "@/contexts/auth-context"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
+import "./globals.css"
+import { AuthProvider } from "@/contexts/auth-context";
 // import { runStartupTasks } from "@/lib/startup"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata = {
-  title: "Legal Chatbot - Indian Constitution",
-  description: "AI-powered legal assistant for the Indian Constitution",
+export const metadata: Metadata = {
+  title: "VIDHI 7 - Legal Chatbot",
+  description: "AI-powered legal assistance for Indian law",
 }
 
 // Run startup tasks
@@ -19,14 +21,17 @@ export const metadata = {
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode
-}) {
+}>) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AuthProvider>{children}</AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+          {children}
+          <Toaster />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

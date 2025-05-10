@@ -473,19 +473,19 @@ export interface Database {
 }
 
 // Type definitions for the lawyer matching system
-export type Lawyer = Database["public"]["Tables"]["lawyers"]["Row"]
+export type LawyerType = Database["public"]["Tables"]["lawyers"]["Row"]
 export type NewLawyer = Database["public"]["Tables"]["lawyers"]["Insert"]
 export type UpdateLawyer = Database["public"]["Tables"]["lawyers"]["Update"]
 
-export type LegalRequest = Database["public"]["Tables"]["legal_requests"]["Row"]
+export type LegalRequestType = Database["public"]["Tables"]["legal_requests"]["Row"]
 export type NewLegalRequest = Database["public"]["Tables"]["legal_requests"]["Insert"]
 export type UpdateLegalRequest = Database["public"]["Tables"]["legal_requests"]["Update"]
 
-export type LawyerMatch = Database["public"]["Tables"]["lawyer_matches"]["Row"]
+export type LawyerMatchType = Database["public"]["Tables"]["lawyer_matches"]["Row"]
 export type NewLawyerMatch = Database["public"]["Tables"]["lawyer_matches"]["Insert"]
 export type UpdateLawyerMatch = Database["public"]["Tables"]["lawyer_matches"]["Update"]
 
-export type LawyerMessage = Database["public"]["Tables"]["lawyer_messages"]["Row"]
+export type LawyerMessageRow = Database["public"]["Tables"]["lawyer_messages"]["Row"]
 export type NewLawyerMessage = Database["public"]["Tables"]["lawyer_messages"]["Insert"]
 export type UpdateLawyerMessage = Database["public"]["Tables"]["lawyer_messages"]["Update"]
 
@@ -529,3 +529,145 @@ export type RequestStatus = (typeof REQUEST_STATUSES)[number]
 export const MATCH_STATUSES = ["pending", "accepted", "rejected", "completed"] as const
 
 export type MatchStatus = (typeof MATCH_STATUSES)[number]
+
+export type User = {
+  id: string
+  full_name: string
+  email?: string
+  created_at: string
+  updated_at: string
+  address?: string
+  city?: string
+  state?: string
+  country?: string
+  postal_code?: string
+  latitude?: number
+  longitude?: number
+}
+
+export type ChatSession = {
+  id: string
+  user_id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+export type Message = {
+  id: string
+  chat_session_id: string
+  user_id: string
+  content: string
+  is_bot: boolean
+  created_at: string
+}
+
+export type Attachment = {
+  id: string
+  message_id: string
+  file_name: string
+  file_type: string
+  file_size: number
+  file_path: string
+  created_at: string
+}
+
+export type Feedback = {
+  id: string
+  message_id: string
+  user_id: string
+  rating: number
+  comment?: string
+  created_at: string
+}
+
+export type UserDocument = {
+  id: string
+  user_id: string
+  file_name: string
+  file_type: string
+  file_size: number
+  file_path: string
+  processed: boolean
+  created_at: string
+}
+
+export type Lawyer = {
+  id: string
+  user_id: string
+  full_name: string
+  email: string
+  phone?: string
+  specialization: string
+  experience_years: number
+  bio?: string
+  address: string
+  city: string
+  state: string
+  country: string
+  postal_code?: string
+  latitude?: number
+  longitude?: number
+  is_verified: boolean
+  is_available: boolean
+  rating?: number
+  created_at: string
+  updated_at: string
+}
+
+export type LegalRequest = {
+  id: string
+  user_id: string
+  title: string
+  description: string
+  legal_area: string
+  urgency: string
+  address: string
+  city: string
+  state: string
+  country: string
+  postal_code?: string
+  latitude?: number
+  longitude?: number
+  status: string
+  assigned_lawyer_id?: string
+  created_at: string
+  updated_at: string
+}
+
+export type LawyerMatch = {
+  id: string
+  legal_request_id: string
+  lawyer_id: string
+  user_id: string
+  status: string
+  match_score?: number
+  created_at: string
+  updated_at: string
+}
+
+export type LawyerMessage = {
+  id: string
+  match_id: string
+  sender_id: string
+  content: string
+  is_read: boolean
+  created_at: string
+}
+
+export type ConstitutionEmbedding = {
+  id: number
+  content: string
+  embedding: number[]
+  metadata?: Record<string, any>
+  created_at: string
+}
+
+export type DocumentEmbedding = {
+  id: number
+  document_id: string
+  content: string
+  embedding: number[]
+  metadata?: Record<string, any>
+  created_at: string
+}

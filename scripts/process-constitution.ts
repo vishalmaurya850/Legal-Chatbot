@@ -18,23 +18,44 @@ if (!supabaseUrl || !supabaseServiceKey) {
 }
 
 if (!mistralApiKey) {
-  console.error("Missing OpenAI API key")
+  console.error("Missing Mistral API key")
   process.exit(1)
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-async function processConstitution() {
+// List of PDF paths using path.join
+const pdfPaths: string[] = [
+  path.join(process.cwd(), "lib", "ChildrenLaw.pdf"),
+  path.join(process.cwd(), "lib", "EnsuringEffectiveLegalServices.pdf"),
+  path.join(process.cwd(), "lib", "GreenLegalOperations.pdf"),
+  path.join(process.cwd(), "lib", "Harrasment.pdf"),
+  path.join(process.cwd(), "lib", "Legaldata.pdf"),
+  path.join(process.cwd(), "lib", "LegalServicesLawyers.pdf"),
+  path.join(process.cwd(), "lib", "LegalServicesLawyers1.pdf"),
+  path.join(process.cwd(), "lib", "LegalServicesLawyers3.pdf"),
+  path.join(process.cwd(), "lib", "LegalServicesonacts.pdf"),
+  path.join(process.cwd(), "lib", "Nyayadeep.pdf"),
+  path.join(process.cwd(), "lib", "ParaLegalVolunteers.pdf"),
+  path.join(process.cwd(), "lib", "WomenLaws.pdf"),
+  path.join(process.cwd(), "lib", "Indian_Constitution.pdf")
+]
+// const { count } = await supabase.from("constitution_embeddings").select("*", { count: "exact", head: true })
+async function processConstitution(pdfPath: string): Promise<void> {
   try {
-    // Check if constitution embeddings already exist
-    const { count } = await supabase.from("constitution_embeddings").select("*", { count: "exact", head: true })
+    // Extract filename for logging and metadata
+    const fileName = path.basename(pdfPath, ".pdf")
+
+    // Check if embeddings already exist for this PDF
+    const { count } = await supabase
+      .from("constitution_embeddings")
+      .select("*", { count: "exact", head: true })
+      .eq("metadata->>source", pdfPath)
 
     if (count && count > 0) {
-      console.log(`Constitution embeddings already exist (${count} entries). Skipping processing.`)
+      console.log(`Embeddings for ${fileName} already exist (${count} entries). Skipping processing.`)
       return
     }
-
-    const pdfPath = path.join(process.cwd(), "lib", "Indian_Constitution.pdf")
 
     // Ensure the PDF file exists
     if (!fs.existsSync(pdfPath)) {
@@ -46,7 +67,7 @@ async function processConstitution() {
     const loader = new PDFLoader(pdfPath)
     const docs = await loader.load()
 
-    console.log(`Loaded ${docs.length} document(s)`)
+    console.log(`Loaded ${docs.length} document(s) from ${fileName}`)
 
     // Split text into chunks
     const textSplitter = new RecursiveCharacterTextSplitter({
@@ -55,7 +76,7 @@ async function processConstitution() {
     })
 
     const chunks = await textSplitter.splitDocuments(docs)
-    console.log(`Split into ${chunks.length} chunks`)
+    console.log(`Split ${fileName} into ${chunks.length} chunks`)
 
     // Create embeddings
     const embeddings = new MistralAIEmbeddings({
@@ -63,7 +84,7 @@ async function processConstitution() {
       model: "mistral-embed",
     })
 
-    console.log("Generating embeddings and storing in Supabase...")
+    console.log(`Generating embeddings for ${fileName} and storing in Supabase...`)
 
     // Process in batches to avoid rate limits
     const batchSize = 5
@@ -78,28 +99,39 @@ async function processConstitution() {
       const dataToInsert = batch.map((chunk, index) => ({
         content: chunk.pageContent,
         embedding: embeddingResults[index],
-        metadata: JSON.stringify(chunk.metadata),
+        metadata: JSON.stringify({
+          ...chunk.metadata,
+          source: pdfPath,
+          fileName: fileName
+        }),
       }))
 
       // Store in Supabase
       const { error } = await supabase.from("constitution_embeddings").insert(dataToInsert)
 
       if (error) {
-        console.error("Error storing embeddings:", error)
+        console.error(`Error storing embeddings for ${fileName}:`, error)
       }
 
-      console.log(`Processed ${i + batch.length}/${chunks.length} chunks`)
+      console.log(`Processed ${i + batch.length}/${chunks.length} chunks for ${fileName}`)
     }
 
-    console.log("Processing complete!")
+    console.log(`Processing complete for ${fileName}!`)
   } catch (error) {
-    console.error("Error processing constitution:", error)
+    console.error(`Error processing ${pdfPath}:`, error)
   }
+}
+
+async function processMultiplePDFs(): Promise<void> {
+  for (const pdfPath of pdfPaths) {
+    await processConstitution(pdfPath)
+  }
+  console.log("All PDFs processed!")
 }
 
 // Run the function if this script is executed directly
 if (require.main === module) {
-  processConstitution().catch(console.error)
+  processMultiplePDFs().catch(console.error)
 }
 
-export { processConstitution }
+export { processConstitution, processMultiplePDFs }

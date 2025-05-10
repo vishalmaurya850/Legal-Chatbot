@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Trash2 } from "lucide-react"
+import { getSupabaseClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -14,6 +14,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Trash2 } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
 
 interface DeleteChatButtonProps {
   chatId: string
@@ -23,21 +25,42 @@ export function DeleteChatButton({ chatId }: DeleteChatButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
+  const supabase = getSupabaseClient()
 
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
-      const response = await fetch(`/api/chat/${chatId}`, {
-        method: "DELETE",
-      })
+      // First delete all messages associated with this chat
+      const { error: messagesError } = await supabase.from("messages").delete().eq("chat_session_id", chatId)
 
-      if (!response.ok) {
-        throw new Error("Failed to delete chat")
+      if (messagesError) {
+        throw messagesError
       }
 
-      router.refresh()
+      // Then delete the chat session
+      const { error: chatError } = await supabase.from("chat_sessions").delete().eq("id", chatId)
+
+      if (chatError) {
+        throw chatError
+      }
+
+      toast({
+        description: "Chat deleted successfully",
+      })
+
+      // If we're currently on the deleted chat page, redirect to chat
+      if (window.location.pathname === `/chat/${chatId}`) {
+        router.push("/chat")
+      } else {
+        // Otherwise just refresh the current page
+        router.refresh()
+      }
     } catch (error) {
       console.error("Error deleting chat:", error)
+      toast({
+        variant: "destructive",
+        description: "Failed to delete chat",
+      })
     } finally {
       setIsDeleting(false)
       setIsOpen(false)
@@ -48,8 +71,8 @@ export function DeleteChatButton({ chatId }: DeleteChatButtonProps) {
     <>
       <Button
         variant="ghost"
-        size="sm"
-        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+        size="icon"
+        className="h-8 w-8 p-0 text-gray-500 hover:text-red-600 hover:bg-red-50"
         onClick={() => setIsOpen(true)}
       >
         <Trash2 className="h-4 w-4" />
@@ -67,9 +90,12 @@ export function DeleteChatButton({ chatId }: DeleteChatButtonProps) {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
+              onClick={(e) => {
+                e.preventDefault()
+                handleDelete()
+              }}
               disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-red-600 text-white hover:bg-red-700"
             >
               {isDeleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>

@@ -25,7 +25,7 @@ export default function LoginPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   // Get redirect path from URL if available
-  const redirectPath = searchParams.get("redirect") || "/dashboard"
+  const redirectPath = searchParams.get("redirect") || "/chat"
 
   // Redirect if already logged in
   useEffect(() => {

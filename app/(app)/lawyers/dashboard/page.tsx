@@ -191,9 +191,9 @@ export default function LawyerDashboardPage() {
       .subscribe()
 
     return () => {
-      matchesSubscription.unsubscribe()
+      supabase.removeChannel(matchesSubscription)
     }
-  }, [user, router, supabase])
+  }, [user, router, supabase, lawyer?.id])
 
   const handleAvailabilityChange = async () => {
     if (!lawyer) return
@@ -241,7 +241,7 @@ export default function LawyerDashboardPage() {
         const updatedRequest = {
           ...acceptedRequest,
           status: "assigned",
-          assigned_lawyer_id: lawyer?.id ?? null,
+          assigned_lawyer_id: lawyer?.id ?? undefined,
           match: {
             ...acceptedRequest.match,
             status: "accepted",
@@ -314,7 +314,7 @@ export default function LawyerDashboardPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-sky-600" />
       </div>
     )
   }
@@ -322,19 +322,21 @@ export default function LawyerDashboardPage() {
   if (!lawyer) {
     return (
       <div className="max-w-3xl mx-auto">
-        <Card>
+        <Card className="border-sky-100">
           <CardHeader>
-            <CardTitle>Lawyer Profile Not Found</CardTitle>
+            <CardTitle className="text-sky-700">Lawyer Profile Not Found</CardTitle>
             <CardDescription>You need to register as a lawyer to access this dashboard.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="mb-4">
+            <p className="mb-4 text-gray-700">
               It looks like you haven't registered as a lawyer yet. Register now to start helping clients with their
               legal needs.
             </p>
           </CardContent>
           <CardFooter>
-            <Button onClick={() => router.push("/lawyers/register")}>Register as a Lawyer</Button>
+            <Button onClick={() => router.push("/lawyers/register")} className="bg-sky-600 hover:bg-sky-700">
+              Register as a Lawyer
+            </Button>
           </CardFooter>
         </Card>
       </div>
@@ -345,15 +347,17 @@ export default function LawyerDashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Lawyer Dashboard</h1>
-          <p className="text-muted-foreground">Manage your legal assistance requests and client communications</p>
+          <h1 className="text-3xl font-bold tracking-tight text-sky-700">Lawyer Dashboard</h1>
+          <p className="text-gray-600">Manage your legal assistance requests and client communications</p>
         </div>
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <Switch id="availability" checked={isAvailable} onCheckedChange={handleAvailabilityChange} />
             <Label htmlFor="availability">Available for new requests</Label>
           </div>
-          <Button onClick={() => router.push("/lawyers/profile")}>Edit Profile</Button>
+          <Button onClick={() => router.push("/lawyers/profile")} className="bg-sky-600 hover:bg-sky-700">
+            Edit Profile
+          </Button>
         </div>
       </div>
 
@@ -363,34 +367,42 @@ export default function LawyerDashboardPage() {
         </Alert>
       )}
 
-      <Card>
+      <Card className="border-sky-100">
         <CardHeader>
-          <CardTitle>Your Lawyer Profile</CardTitle>
+          <CardTitle className="text-sky-700">Your Lawyer Profile</CardTitle>
           <CardDescription>Your professional information and status</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <h3 className="font-medium mb-2">Profile Status</h3>
+              <h3 className="font-medium mb-2 text-gray-700">Profile Status</h3>
               <div className="flex items-center space-x-2">
-                <Badge variant={lawyer.is_verified ? "default" : "secondary"}>
+                <Badge
+                  variant={lawyer.is_verified ? "default" : "secondary"}
+                  className={lawyer.is_verified ? "bg-sky-600" : ""}
+                >
                   {lawyer.is_verified ? "Verified" : "Pending Verification"}
                 </Badge>
-                <Badge variant={isAvailable ? "default" : "outline"}>{isAvailable ? "Available" : "Unavailable"}</Badge>
+                <Badge
+                  variant={isAvailable ? "default" : "outline"}
+                  className={isAvailable ? "bg-green-600" : "border-gray-300 text-gray-700"}
+                >
+                  {isAvailable ? "Available" : "Unavailable"}
+                </Badge>
               </div>
             </div>
             <div>
-              <h3 className="font-medium mb-2">Specialization</h3>
-              <p>{lawyer.specialization}</p>
+              <h3 className="font-medium mb-2 text-gray-700">Specialization</h3>
+              <p className="text-gray-600">{lawyer.specialization}</p>
             </div>
             <div>
-              <h3 className="font-medium mb-2">Experience</h3>
-              <p>{lawyer.experience_years} years</p>
+              <h3 className="font-medium mb-2 text-gray-700">Experience</h3>
+              <p className="text-gray-600">{lawyer.experience_years} years</p>
             </div>
             <div>
-              <h3 className="font-medium mb-2">Location</h3>
-              <p className="flex items-center">
-                <MapPin className="h-4 w-4 mr-1" />
+              <h3 className="font-medium mb-2 text-gray-700">Location</h3>
+              <p className="flex items-center text-gray-600">
+                <MapPin className="h-4 w-4 mr-1 text-sky-600" />
                 {lawyer.city}, {lawyer.state}, {lawyer.country}
               </p>
             </div>
@@ -398,43 +410,45 @@ export default function LawyerDashboardPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="pending">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="pending">
+      <Tabs defaultValue="pending" className="border-sky-100">
+        <TabsList className="grid w-full grid-cols-3 bg-sky-50">
+          <TabsTrigger value="pending" className="data-[state=active]:bg-sky-600 data-[state=active]:text-white">
             Pending Requests{" "}
             {pendingRequests.length > 0 && (
-              <Badge variant="secondary" className="ml-2">
+              <Badge variant="secondary" className="ml-2 bg-sky-200 text-sky-800">
                 {pendingRequests.length}
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="active">
+          <TabsTrigger value="active" className="data-[state=active]:bg-sky-600 data-[state=active]:text-white">
             Active Cases{" "}
             {activeRequests.length > 0 && (
-              <Badge variant="secondary" className="ml-2">
+              <Badge variant="secondary" className="ml-2 bg-sky-200 text-sky-800">
                 {activeRequests.length}
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="completed">Completed Cases</TabsTrigger>
+          <TabsTrigger value="completed" className="data-[state=active]:bg-sky-600 data-[state=active]:text-white">
+            Completed Cases
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending" className="space-y-4 mt-6">
           {pendingRequests.length === 0 ? (
-            <Card>
+            <Card className="border-sky-100">
               <CardContent className="py-8 text-center">
-                <p className="text-muted-foreground">No pending requests at the moment.</p>
+                <p className="text-gray-600">No pending requests at the moment.</p>
               </CardContent>
             </Card>
           ) : (
             pendingRequests.map((request) => (
-              <Card key={request.id}>
+              <Card key={request.id} className="border-sky-100">
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div>
-                      <CardTitle>{request.title}</CardTitle>
+                      <CardTitle className="text-sky-700">{request.title}</CardTitle>
                       <CardDescription className="flex items-center mt-1">
-                        <Clock className="h-4 w-4 mr-1" />
+                        <Clock className="h-4 w-4 mr-1 text-sky-600" />
                         {new Date(request.created_at).toLocaleDateString()}
                         <span className="mx-2">•</span>
                         <Badge variant={request.urgency === "High" ? "destructive" : "outline"}>
@@ -446,13 +460,17 @@ export default function LawyerDashboardPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-destructive"
+                        className="text-red-600 border-red-200 hover:bg-red-50"
                         onClick={() => handleRejectRequest(request.match.id)}
                       >
                         <XCircle className="h-4 w-4 mr-1" />
                         Decline
                       </Button>
-                      <Button size="sm" onClick={() => handleAcceptRequest(request.match.id, request.id)}>
+                      <Button
+                        size="sm"
+                        onClick={() => handleAcceptRequest(request.match.id, request.id)}
+                        className="bg-sky-600 hover:bg-sky-700"
+                      >
                         <CheckCircle className="h-4 w-4 mr-1" />
                         Accept
                       </Button>
@@ -462,19 +480,19 @@ export default function LawyerDashboardPage() {
                 <CardContent>
                   <div className="space-y-4">
                     <div>
-                      <h3 className="font-medium mb-1">Legal Area</h3>
-                      <p>{request.legal_area}</p>
+                      <h3 className="font-medium mb-1 text-gray-700">Legal Area</h3>
+                      <p className="text-gray-600">{request.legal_area}</p>
                     </div>
                     <div>
-                      <h3 className="font-medium mb-1">Description</h3>
-                      <p className="text-sm">{request.description}</p>
+                      <h3 className="font-medium mb-1 text-gray-700">Description</h3>
+                      <p className="text-sm text-gray-600">{request.description}</p>
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center text-sm text-muted-foreground">
-                        <MapPin className="h-4 w-4 mr-1" />
+                      <div className="flex items-center text-sm text-gray-500">
+                        <MapPin className="h-4 w-4 mr-1 text-sky-600" />
                         {request.city}, {request.state}
                       </div>
-                      <Link href={`/lawyers/requests/${request.id}`} className="text-primary hover:underline">
+                      <Link href={`/lawyers/requests/${request.id}`} className="text-sky-600 hover:underline">
                         View details
                       </Link>
                     </div>
@@ -487,20 +505,20 @@ export default function LawyerDashboardPage() {
 
         <TabsContent value="active" className="space-y-4 mt-6">
           {activeRequests.length === 0 ? (
-            <Card>
+            <Card className="border-sky-100">
               <CardContent className="py-8 text-center">
-                <p className="text-muted-foreground">You don't have any active cases at the moment.</p>
+                <p className="text-gray-600">You don't have any active cases at the moment.</p>
               </CardContent>
             </Card>
           ) : (
             activeRequests.map((request) => (
-              <Card key={request.id}>
+              <Card key={request.id} className="border-sky-100">
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div>
-                      <CardTitle>{request.title}</CardTitle>
+                      <CardTitle className="text-sky-700">{request.title}</CardTitle>
                       <CardDescription className="flex items-center mt-1">
-                        <Clock className="h-4 w-4 mr-1" />
+                        <Clock className="h-4 w-4 mr-1 text-sky-600" />
                         Accepted on {new Date(request.match.updated_at).toLocaleDateString()}
                       </CardDescription>
                     </div>
@@ -509,11 +527,16 @@ export default function LawyerDashboardPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => router.push(`/lawyers/chat/${request.match.id}`)}
+                        className="border-sky-200 text-sky-700 hover:bg-sky-50"
                       >
                         <MessageSquare className="h-4 w-4 mr-1" />
                         Chat
                       </Button>
-                      <Button size="sm" onClick={() => handleCompleteRequest(request.match.id, request.id)}>
+                      <Button
+                        size="sm"
+                        onClick={() => handleCompleteRequest(request.match.id, request.id)}
+                        className="bg-sky-600 hover:bg-sky-700"
+                      >
                         <CheckCircle className="h-4 w-4 mr-1" />
                         Mark as Completed
                       </Button>
@@ -523,24 +546,24 @@ export default function LawyerDashboardPage() {
                 <CardContent>
                   <div className="space-y-4">
                     <div>
-                      <h3 className="font-medium mb-1">Legal Area</h3>
-                      <p>{request.legal_area}</p>
+                      <h3 className="font-medium mb-1 text-gray-700">Legal Area</h3>
+                      <p className="text-gray-600">{request.legal_area}</p>
                     </div>
                     <div>
-                      <h3 className="font-medium mb-1">Client</h3>
+                      <h3 className="font-medium mb-1 text-gray-700">Client</h3>
                       <div className="flex items-center">
-                        <User className="h-4 w-4 mr-1" />
-                        <Link href={`/lawyers/clients/${request.user_id}`} className="text-primary hover:underline">
+                        <User className="h-4 w-4 mr-1 text-sky-600" />
+                        <Link href={`/lawyers/clients/${request.user_id}`} className="text-sky-600 hover:underline">
                           View client profile
                         </Link>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center text-sm text-muted-foreground">
-                        <MapPin className="h-4 w-4 mr-1" />
+                      <div className="flex items-center text-sm text-gray-500">
+                        <MapPin className="h-4 w-4 mr-1 text-sky-600" />
                         {request.city}, {request.state}
                       </div>
-                      <Link href={`/lawyers/requests/${request.id}`} className="text-primary hover:underline">
+                      <Link href={`/lawyers/requests/${request.id}`} className="text-sky-600 hover:underline">
                         View details
                       </Link>
                     </div>
@@ -553,20 +576,20 @@ export default function LawyerDashboardPage() {
 
         <TabsContent value="completed" className="space-y-4 mt-6">
           {completedRequests.length === 0 ? (
-            <Card>
+            <Card className="border-sky-100">
               <CardContent className="py-8 text-center">
-                <p className="text-muted-foreground">You haven't completed any cases yet.</p>
+                <p className="text-gray-600">You haven't completed any cases yet.</p>
               </CardContent>
             </Card>
           ) : (
             completedRequests.map((request) => (
-              <Card key={request.id}>
+              <Card key={request.id} className="border-sky-100">
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div>
-                      <CardTitle>{request.title}</CardTitle>
+                      <CardTitle className="text-sky-700">{request.title}</CardTitle>
                       <CardDescription className="flex items-center mt-1">
-                        <Clock className="h-4 w-4 mr-1" />
+                        <Clock className="h-4 w-4 mr-1 text-sky-600" />
                         Completed on {new Date(request.match.updated_at).toLocaleDateString()}
                       </CardDescription>
                     </div>
@@ -575,15 +598,15 @@ export default function LawyerDashboardPage() {
                 <CardContent>
                   <div className="space-y-4">
                     <div>
-                      <h3 className="font-medium mb-1">Legal Area</h3>
-                      <p>{request.legal_area}</p>
+                      <h3 className="font-medium mb-1 text-gray-700">Legal Area</h3>
+                      <p className="text-gray-600">{request.legal_area}</p>
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center text-sm text-muted-foreground">
-                        <MapPin className="h-4 w-4 mr-1" />
+                      <div className="flex items-center text-sm text-gray-500">
+                        <MapPin className="h-4 w-4 mr-1 text-sky-600" />
                         {request.city}, {request.state}
                       </div>
-                      <Link href={`/lawyers/requests/${request.id}`} className="text-primary hover:underline">
+                      <Link href={`/lawyers/requests/${request.id}`} className="text-sky-600 hover:underline">
                         View details
                       </Link>
                     </div>
