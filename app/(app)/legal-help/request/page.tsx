@@ -14,7 +14,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LEGAL_SPECIALIZATIONS, URGENCY_LEVELS } from "@/types/supabase"
-import { Loader2 } from "lucide-react"
+import { Loader2, MapPin } from "lucide-react"
 
 export default function LegalHelpRequestPage() {
   const router = useRouter()
@@ -36,6 +36,8 @@ export default function LegalHelpRequestPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [nearbyLawyers, setNearbyLawyers] = useState<any[]>([])
+  const [showLawyers, setShowLawyers] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -76,8 +78,8 @@ export default function LegalHelpRequestPage() {
     try {
       // Geocode the address to get latitude and longitude
       const geocodeUrl = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(
-        `${formData.address}, ${formData.city}, ${formData.state}, ${formData.country}`,
-      )}&key=YOUR_OPENCAGE_API_KEY`
+        `${formData.address}, ${formData.city}, ${formData.state}, ${formData.country}, ${formData.postalCode}`,
+      )}&key=${process.env.NEXT_PUBLIC_OPENCAGE_API_KEY}`
 
       let latitude = null
       let longitude = null
@@ -93,6 +95,20 @@ export default function LegalHelpRequestPage() {
         console.error("Error geocoding address:", geocodeError)
         // Continue without coordinates if geocoding fails
       }
+
+      // Update user profile with location data
+      await supabase
+        .from("users")
+        .update({
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          country: formData.country,
+          postal_code: formData.postalCode || null,
+          latitude,
+          longitude,
+        })
+        .eq("id", user.id)
 
       // Insert legal request
       const { data: requestData, error: requestError } = await supabase
@@ -119,22 +135,8 @@ export default function LegalHelpRequestPage() {
         throw requestError
       }
 
-      // Update user location data if not already set
-      await supabase
-        .from("users")
-        .update({
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          country: formData.country,
-          postal_code: formData.postalCode || null,
-          latitude,
-          longitude,
-        })
-        .eq("id", user.id)
-
       // Find nearby lawyers
-      const { data: nearbyLawyers, error: lawyersError } = await supabase.rpc("find_nearby_lawyers", {
+      const { data: nearbyLawyersData, error: lawyersError } = await supabase.rpc("find_nearby_lawyers", {
         request_id: requestData.id,
         max_distance: 50.0, // 50km radius
       })
@@ -145,8 +147,10 @@ export default function LegalHelpRequestPage() {
       }
 
       // Create matches with nearby lawyers
-      if (nearbyLawyers && nearbyLawyers.length > 0) {
-        const matches = nearbyLawyers.map((lawyer: any) => ({
+      if (nearbyLawyersData && nearbyLawyersData.length > 0) {
+        setNearbyLawyers(nearbyLawyersData)
+
+        const matches = nearbyLawyersData.map((lawyer: any) => ({
           legal_request_id: requestData.id,
           lawyer_id: lawyer.lawyer_id,
           user_id: user.id,
@@ -154,15 +158,28 @@ export default function LegalHelpRequestPage() {
           status: "pending",
         }))
 
-        const { error: matchError } = await supabase.from("lawyer_matches").insert(matches)
+        const { data: matchData, error: matchError } = await supabase.from("lawyer_matches").insert(matches).select()
 
         if (matchError) {
           console.error("Error creating lawyer matches:", matchError)
           // Continue even if match creation fails
+        } else {
+          // Send notification emails to lawyers and user
+          await fetch("/api/email/legal-request", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              requestId: requestData.id,
+              matches: matchData,
+            }),
+          })
         }
       }
 
       setSuccess("Your legal help request has been submitted successfully. We'll match you with suitable lawyers soon.")
+      setShowLawyers(nearbyLawyersData && nearbyLawyersData.length > 0)
 
       // Clear form after successful submission
       setFormData({
@@ -177,10 +194,12 @@ export default function LegalHelpRequestPage() {
         postalCode: "",
       })
 
-      // Redirect to dashboard after a short delay
-      setTimeout(() => {
-        router.push("/legal-help/dashboard")
-      }, 3000)
+      // Redirect to dashboard after a short delay if no nearby lawyers to show
+      if (!nearbyLawyersData || nearbyLawyersData.length === 0) {
+        setTimeout(() => {
+          router.push("/legal-help/dashboard")
+        }, 3000)
+      }
     } catch (err: any) {
       console.error("Error submitting legal help request:", err)
       setError(err.message || "An unexpected error occurred while submitting your request")
@@ -189,182 +208,224 @@ export default function LegalHelpRequestPage() {
     }
   }
 
+  const handleContinue = () => {
+    router.push("/legal-help/dashboard")
+  }
+
   return (
     <div className="max-w-3xl mx-auto">
       <h1 className="text-3xl font-bold tracking-tight mb-6">Request Legal Help</h1>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Legal Help Request</CardTitle>
-          <CardDescription>
-            Fill out this form to request legal assistance. We'll match you with qualified lawyers in your area.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            {success && (
+      {showLawyers ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Nearby Lawyers Found</CardTitle>
+            <CardDescription>
+              We've found {nearbyLawyers.length} lawyer{nearbyLawyers.length !== 1 ? "s" : ""} in your area who may be
+              able to help with your request.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {nearbyLawyers.map((lawyer, index) => (
+                <div key={index} className="flex items-start p-4 border rounded-lg">
+                  <MapPin className="h-5 w-5 text-sky-600 mt-1 mr-3 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Lawyer {index + 1}</p>
+                    <p className="text-sm text-gray-600">
+                      Distance: {lawyer.distance.toFixed(1)} km • Match Score: {(lawyer.match_score * 100).toFixed(0)}%
+                    </p>
+                  </div>
+                </div>
+              ))}
               <Alert>
-                <AlertDescription>{success}</AlertDescription>
+                <AlertDescription>
+                  We've notified these lawyers about your request. You'll receive an email when a lawyer accepts your
+                  request.
+                </AlertDescription>
               </Alert>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="title">Title of your legal issue *</Label>
-              <Input
-                id="title"
-                name="title"
-                value={formData.title}
-                onChange={handleChange}
-                placeholder="E.g., Property dispute with neighbor"
-                required
-              />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Detailed description *</Label>
-              <Textarea
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                placeholder="Please describe your legal issue in detail..."
-                className="min-h-[150px]"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="legalArea">Legal Area *</Label>
-                <Select
-                  value={formData.legalArea}
-                  onValueChange={(value) => handleSelectChange("legalArea", value)}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select legal area" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LEGAL_SPECIALIZATIONS.map((specialization) => (
-                      <SelectItem key={specialization} value={specialization}>
-                        {specialization}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handleContinue} className="w-full">
+              Continue to Dashboard
+            </Button>
+          </CardFooter>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Legal Help Request</CardTitle>
+            <CardDescription>
+              Fill out this form to request legal assistance. We'll match you with qualified lawyers in your area.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              {success && (
+                <Alert>
+                  <AlertDescription>{success}</AlertDescription>
+                </Alert>
+              )}
 
               <div className="space-y-2">
-                <Label htmlFor="urgency">Urgency *</Label>
-                <Select
-                  value={formData.urgency}
-                  onValueChange={(value) => handleSelectChange("urgency", value)}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select urgency level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {URGENCY_LEVELS.map((level) => (
-                      <SelectItem key={level} value={level}>
-                        {level}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-lg font-medium">Your Location</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                We'll use this information to match you with lawyers in your area.
-              </p>
-
-              <div className="space-y-2">
-                <Label htmlFor="address">Address *</Label>
+                <Label htmlFor="title">Title of your legal issue *</Label>
                 <Input
-                  id="address"
-                  name="address"
-                  value={formData.address}
+                  id="title"
+                  name="title"
+                  value={formData.title}
                   onChange={handleChange}
-                  placeholder="123 Main St"
+                  placeholder="E.g., Property dispute with neighbor"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Detailed description *</Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  placeholder="Please describe your legal issue in detail..."
+                  className="min-h-[150px]"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="city">City *</Label>
-                  <Input
-                    id="city"
-                    name="city"
-                    value={formData.city}
-                    onChange={handleChange}
-                    placeholder="New Delhi"
+                  <Label htmlFor="legalArea">Legal Area *</Label>
+                  <Select
+                    value={formData.legalArea}
+                    onValueChange={(value) => handleSelectChange("legalArea", value)}
                     required
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select legal area" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LEGAL_SPECIALIZATIONS.map((specialization) => (
+                        <SelectItem key={specialization} value={specialization}>
+                          {specialization}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="state">State/Province *</Label>
-                  <Input
-                    id="state"
-                    name="state"
-                    value={formData.state}
-                    onChange={handleChange}
-                    placeholder="Delhi"
+                  <Label htmlFor="urgency">Urgency *</Label>
+                  <Select
+                    value={formData.urgency}
+                    onValueChange={(value) => handleSelectChange("urgency", value)}
                     required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="country">Country *</Label>
-                  <Input
-                    id="country"
-                    name="country"
-                    value={formData.country}
-                    onChange={handleChange}
-                    placeholder="India"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="postalCode">Postal Code</Label>
-                  <Input
-                    id="postalCode"
-                    name="postalCode"
-                    value={formData.postalCode}
-                    onChange={handleChange}
-                    placeholder="110001"
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select urgency level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {URGENCY_LEVELS.map((level) => (
+                        <SelectItem key={level} value={level}>
+                          {level}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            </div>
-          </form>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          <Button variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting || !!success}>
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              "Submit Request"
-            )}
-          </Button>
-        </CardFooter>
-      </Card>
+
+              <div className="space-y-2">
+                <h3 className="text-lg font-medium">Your Location</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  We'll use this information to match you with lawyers in your area.
+                </p>
+
+                <div className="space-y-2">
+                  <Label htmlFor="address">Address *</Label>
+                  <Input
+                    id="address"
+                    name="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    placeholder="123 Main St"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City *</Label>
+                    <Input
+                      id="city"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleChange}
+                      placeholder="New Delhi"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State/Province *</Label>
+                    <Input
+                      id="state"
+                      name="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      placeholder="Delhi"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="country">Country *</Label>
+                    <Input
+                      id="country"
+                      name="country"
+                      value={formData.country}
+                      onChange={handleChange}
+                      placeholder="India"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="postalCode">Postal Code</Label>
+                    <Input
+                      id="postalCode"
+                      name="postalCode"
+                      value={formData.postalCode}
+                      onChange={handleChange}
+                      placeholder="110001"
+                    />
+                  </div>
+                </div>
+              </div>
+            </form>
+          </CardContent>
+          <CardFooter className="flex justify-between">
+            <Button variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit} disabled={isSubmitting || !!success}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                "Submit Request"
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
     </div>
   )
 }

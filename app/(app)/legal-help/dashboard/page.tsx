@@ -31,7 +31,7 @@ export default function LegalHelpDashboardPage() {
     }
 
     const fetchRequests = async () => {
-      setIsLoading(true)
+      setIsLoading(false)
       setError(null)
 
       try {

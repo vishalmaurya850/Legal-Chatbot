@@ -62,7 +62,8 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-full">
+    // <div className="h[90vh] overflow-auto">
+    <div>
       <Chat chatId={id as string} />
     </div>
   )

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { getSupabaseClient } from "@/lib/supabase/client"
@@ -14,7 +14,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LEGAL_SPECIALIZATIONS } from "@/types/supabase"
-import { Loader2 } from "lucide-react"
+import { Loader2, CheckCircle2 } from "lucide-react"
 
 export default function LawyerRegistrationPage() {
   const router = useRouter()
@@ -38,6 +38,27 @@ export default function LawyerRegistrationPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRegistered, setIsRegistered] = useState(false)
+
+  // Check if user is already registered as a lawyer
+  useEffect(() => {
+    if (!user) return
+
+    const checkLawyerStatus = async () => {
+      const { data, error } = await supabase.from("lawyers").select("id, is_verified").eq("user_id", user.id).single()
+
+      if (data) {
+        setIsRegistered(true)
+        setSuccess(
+          data.is_verified
+            ? "You are registered and verified as a lawyer."
+            : "You are registered as a lawyer. Your profile is pending verification.",
+        )
+      }
+    }
+
+    checkLawyerStatus()
+  }, [user, supabase])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -78,8 +99,8 @@ export default function LawyerRegistrationPage() {
     try {
       // Geocode the address to get latitude and longitude
       const geocodeUrl = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(
-        `${formData.address}, ${formData.city}, ${formData.state}, ${formData.country}`,
-      )}&key=YOUR_OPENCAGE_API_KEY`
+        `${formData.address}, ${formData.city}, ${formData.state}, ${formData.country}, ${formData.postalCode}`,
+      )}&key=${process.env.NEXT_PUBLIC_OPENCAGE_API_KEY}`
 
       let latitude = null
       let longitude = null
@@ -114,7 +135,7 @@ export default function LawyerRegistrationPage() {
         longitude,
         is_verified: false,
         is_available: true,
-      })
+      }).select("id")
 
       if (insertError) {
         throw insertError
@@ -124,6 +145,7 @@ export default function LawyerRegistrationPage() {
       await supabase
         .from("users")
         .update({
+          full_name: formData.fullName,
           address: formData.address,
           city: formData.city,
           state: formData.state,
@@ -134,9 +156,21 @@ export default function LawyerRegistrationPage() {
         })
         .eq("id", user.id)
 
+      // Send registration confirmation email
+      await fetch("/api/email/lawyer-registration", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lawyerId: data && data[0] ? data[0].id : null,
+        }),
+      })
+
       setSuccess(
         "Your lawyer profile has been submitted for verification. We'll review your information and get back to you soon.",
       )
+      setIsRegistered(true)
 
       // Clear form after successful submission
       setFormData({
@@ -163,6 +197,25 @@ export default function LawyerRegistrationPage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (isRegistered) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <h1 className="text-3xl font-bold tracking-tight mb-6">Lawyer Registration</h1>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
+              <h2 className="text-2xl font-bold mb-2">You are registered as a lawyer</h2>
+              <p className="text-gray-600 mb-6">{success}</p>
+              <Button onClick={() => router.push("/lawyers/dashboard")}>Go to Lawyer Dashboard</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (

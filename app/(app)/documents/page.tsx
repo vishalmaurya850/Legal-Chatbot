@@ -3,35 +3,51 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FileText, Upload, Clock, Check } from "lucide-react"
-import { cookies } from "next/headers"
 
 export default async function DocumentsPage() {
   const supabase = await createServerSupabaseClient()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  // Validate user with getUser()
-  const { data: userData, error: userError } = await (await supabase).auth.getUser()
-  if (userError || !userData.user) {
-    console.error("Error validating user:", userError)
+  if (!session) {
     return null
   }
 
-  // Verify user exists in users table
+  // Check if user exists in the users table
   const { data: userRecord, error: userRecordError } = await supabase
-    .from("users") // Ensure supabase is awaited
-    .select("id")
-    .eq("id", userData.user.id)
+    .from("users")
+    .select("*")
+    .eq("id", session.user.id)
     .single()
 
+  // If user doesn't exist, create them
   if (userRecordError || !userRecord) {
     console.error("User not found in users table:", userRecordError)
-    return null
+
+    // Create user record
+    const { error: insertError } = await supabase.from("users").insert({
+      id: session.user.id,
+      full_name: session.user.email || "Unknown User",
+    })
+
+    if (insertError) {
+      console.error("Error creating user record:", insertError)
+      return (
+        <div className="p-8 text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Error Setting Up Your Account</h1>
+          <p className="mb-4">We encountered an issue while setting up your account. Please try refreshing the page.</p>
+          <Button onClick={() => window.location.reload()}>Refresh Page</Button>
+        </div>
+      )
+    }
   }
 
   // Get user documents
   const { data: documents } = await supabase
-    .from("user_documents") // Ensure supabase is awaited
+    .from("user_documents")
     .select("*")
-    .eq("user_id", userData.user.id)
+    .eq("user_id", session.user.id)
     .order("created_at", { ascending: false })
 
   return (
@@ -51,7 +67,7 @@ export default async function DocumentsPage() {
 
       {documents && documents.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {documents.map((doc: { id: string; file_name: string; file_size: number; created_at: string; processed: boolean }) => (
+          {documents.map((doc) => (
             <Card key={doc.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">

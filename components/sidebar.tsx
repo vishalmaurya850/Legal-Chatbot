@@ -72,11 +72,7 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full w-64 flex-col border-r border-sky-100 bg-white">
-      <div className="flex h-16 items-center border-b border-sky-100 px-4">
-        {/* <Link href="/dashboard" className="flex items-center">
-          <h1 className="text-xl font-bold text-sky-700">VIDHI 7</h1>
-        </Link> */}
-      </div>
+     
       <ScrollArea className="flex-1 px-2 py-4">
         <div className="space-y-1">
           <Link href="/chat">

@@ -1,103 +1,94 @@
-import { createClient } from "@supabase/supabase-js"
-import type { Database } from "@/types/supabase"
+import { SpeechClient } from "@google-cloud/speech"
 
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey)
+// Initialize the Google Cloud clients
+let speechClient: SpeechClient
 
-// Function to transcribe audio using Google Speech-to-Text API
-export async function transcribeAudio(audioBlob: Blob, userId: string): Promise<{ transcription: string; id: string }> {
+try {
+  // Initialize the Speech client with credentials from environment variables
+  speechClient = new SpeechClient()
+} catch (error) {
+  console.error("Error initializing Google Cloud Speech client:", error)
+}
+
+interface TranscriptionResult {
+  transcription: string
+  confidence: number
+}
+
+/**
+ * Transcribes audio using Google Cloud Speech-to-Text API
+ * @param audioBuffer The audio buffer to transcribe
+ * @param mimeType The MIME type of the audio (e.g., 'audio/webm', 'audio/wav')
+ * @param languageCode The language code (default: 'en-US')
+ */
+export async function transcribeAudio(
+  audioBuffer: Buffer,
+  mimeType = "audio/webm",
+  languageCode = "en-US",
+): Promise<TranscriptionResult> {
   try {
-    // Convert blob to base64
-    const buffer = await audioBlob.arrayBuffer()
-    const base64Audio = Buffer.from(buffer).toString("base64")
-
-    // Call Google Speech-to-Text API
-    const response = await fetch("https://speech.googleapis.com/v1/speech:recognize", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GOOGLE_API_KEY}`,
+    // For short audio (< 1 minute), we can use the synchronous recognize method
+    const [response] = await speechClient.recognize({
+      audio: {
+        content: audioBuffer.toString("base64"),
       },
-      body: JSON.stringify({
-        config: {
-          encoding: "WEBM_OPUS",
-          sampleRateHertz: 48000,
-          languageCode: "en-US",
-          model: "default",
-          enableAutomaticPunctuation: true,
-        },
-        audio: {
-          content: base64Audio,
-        },
-      }),
+      config: {
+        encoding: mimeType.includes("webm") ? "WEBM_OPUS" : "LINEAR16",
+        sampleRateHertz: 48000,
+        languageCode,
+        model: "default",
+        useEnhanced: true,
+        enableAutomaticPunctuation: true,
+      },
     })
 
-    if (!response.ok) {
-      throw new Error(`Speech-to-Text API error: ${response.statusText}`)
-    }
+    const transcription =
+      response.results
+        ?.map((result) => result.alternatives?.[0]?.transcript)
+        .filter(Boolean)
+        .join(" ") || ""
 
-    const data = await response.json()
-
-    if (!data.results || data.results.length === 0) {
-      throw new Error("No transcription results returned")
-    }
-
-    const transcription = data.results.map((result: any) => result.alternatives[0].transcript).join(" ")
-
-    // Save audio file to Supabase Storage
-    const fileName = `speech/${userId}/${Date.now()}.webm`
-    const { error: uploadError } = await supabase.storage.from("audio-uploads").upload(fileName, audioBlob)
-
-    if (uploadError) {
-      console.error("Error uploading audio:", uploadError)
-      throw new Error(`Error uploading audio: ${uploadError.message}`)
-    }
-
-    // Get the public URL
-    const { data: urlData } = supabase.storage.from("audio-uploads").getPublicUrl(fileName)
-
-    // Save transcription to database
-    const { data: transcriptionData, error: dbError } = await supabase
-      .from("speech_transcriptions")
-      .insert({
-        user_id: userId,
-        audio_file_path: urlData.publicUrl,
-        transcription,
-        language_code: "en-US",
-        duration_seconds: buffer.byteLength / 16000, // Approximate duration
-      })
-      .select("id")
-      .single()
-
-    if (dbError) {
-      console.error("Error saving transcription:", dbError)
-      throw new Error(`Error saving transcription: ${dbError.message}`)
-    }
+    const confidence = response.results?.[0]?.alternatives?.[0]?.confidence || 0
 
     return {
       transcription,
-      id: transcriptionData.id,
+      confidence,
     }
   } catch (error) {
-    console.error("Error in transcribeAudio:", error)
-    throw error
+    console.error("Error transcribing audio:", error)
+    if (error instanceof Error) {
+      throw new Error(`Failed to transcribe audio: ${error.message}`)
+    } else {
+      throw new Error("Failed to transcribe audio: Unknown error")
+    }
   }
 }
 
-// Function to get transcription by ID
-export async function getTranscription(id: string): Promise<string> {
-  try {
-    const { data, error } = await supabase.from("speech_transcriptions").select("transcription").eq("id", id).single()
+/**
+ * Calculates the duration of an audio file in seconds
+ * This is an approximation based on the file size and encoding
+ */
+export function calculateAudioDuration(audioBuffer: Buffer, mimeType = "audio/webm"): number {
+  // For WebM with Opus, approximate 32 kbps
+  // For WAV, approximate 16-bit PCM at 48kHz stereo
+  const bytesPerSecond = mimeType.includes("webm") ? 4000 : 192000
+  return audioBuffer.length / bytesPerSecond
+}
 
-    if (error) {
-      throw error
-    }
-
-    return data.transcription
-  } catch (error) {
-    console.error("Error getting transcription:", error)
-    throw error
+/**
+ * Detects the audio format from the buffer
+ */
+export function detectAudioFormat(buffer: Buffer): string {
+  // Check for WAV header (RIFF)
+  if (buffer.length >= 4 && buffer.slice(0, 4).toString() === "RIFF") {
+    return "audio/wav"
   }
+
+  // Check for WebM header (starts with 0x1A 0x45 0xDF 0xA3)
+  if (buffer.length >= 4 && buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) {
+    return "audio/webm"
+  }
+
+  // Default to WebM
+  return "audio/webm"
 }

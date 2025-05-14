@@ -16,6 +16,7 @@ export default function AppLayout({
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const pathname = usePathname()
+  const isChatPage = pathname.includes("/chat")
 
   // Close sidebar when route changes on mobile
   useEffect(() => {
@@ -23,7 +24,9 @@ export default function AppLayout({
   }, [pathname])
 
   return (
-    <div className="flex h-screen bg-white">
+    <>
+    <Navbar />
+    <div className="flex bg-gray-50">
       {/* Mobile sidebar toggle */}
       <div className="fixed top-4 left-4 z-50 md:hidden">
         <Button
@@ -51,10 +54,14 @@ export default function AppLayout({
       )}
 
       {/* Main content */}
-      <div className="flex flex-col flex-1 w-full md:w-auto">
-        <Navbar />
-        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+      <div className="flex flex-col flex-1 w-full md:w-auto h-[89vh] overflow-auto ">
+       
+        <main className={`flex-1 relative  ${isChatPage ? "p-0" : "p-4 md:p-6 lg:p-8"} `}>
+          {isChatPage ? children : <div className="max-w-7xl mx-auto">{children}</div>}
+        </main>
       </div>
+      
     </div>
+    </>
   )
 }

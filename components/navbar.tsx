@@ -32,8 +32,8 @@ export function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center border-b border-sky-100 bg-white px-4 md:px-6">
-      <div className="flex flex-1 items-center justify-between">
+    <header className="sticky top-0 z-30 flex h-26 items-center border-b border-sky-100 bg-white px-4 md:px-6">
+      <div className="flex flex-1 items-center justify-between h-[10vh]">
         <div className="flex items-center">
           <Link href="/dashboard" className="flex items-center">
             <h1 className="ml-10 md:ml-0 text-xl font-bold text-sky-700">VIDHI 7</h1>
@@ -42,7 +42,7 @@ export function Navbar() {
 
         <div className="flex items-center gap-2">
           <div className="hidden md:flex md:items-center md:gap-4">
-            <Link href="/chat">
+            {/* <Link href="/chat">
               <Button
                 variant={pathname.startsWith("/chat") ? "default" : "ghost"}
                 className={
@@ -51,7 +51,7 @@ export function Navbar() {
               >
                 AI Chat
               </Button>
-            </Link>
+            </Link> */}
             <Link href="/documents">
               <Button
                 variant={pathname.startsWith("/documents") ? "default" : "ghost"}
