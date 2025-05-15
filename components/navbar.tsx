@@ -52,7 +52,7 @@ export function Navbar() {
                 AI Chat
               </Button>
             </Link> */}
-            <Link href="/documents">
+            {/* <Link href="/documents">
               <Button
                 variant={pathname.startsWith("/documents") ? "default" : "ghost"}
                 className={
@@ -61,7 +61,7 @@ export function Navbar() {
               >
                 Documents
               </Button>
-            </Link>
+            </Link> */}
             <Link href="/legal-help/dashboard">
               <Button
                 variant={pathname.startsWith("/legal-help") ? "default" : "ghost"}
@@ -100,12 +100,12 @@ export function Navbar() {
                   Settings
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
+              {/* <DropdownMenuItem asChild>
                 <Link href="/help" className="flex w-full cursor-pointer items-center">
                   <HelpCircle className="mr-2 h-4 w-4" />
                   Help
                 </Link>
-              </DropdownMenuItem>
+              </DropdownMenuItem> */}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="flex cursor-pointer items-center text-red-600 focus:text-red-600"

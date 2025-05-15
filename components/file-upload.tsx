@@ -88,7 +88,6 @@ export function FileUpload({
       setUploadProgress(95);
 
       // For now, skip the embedding generation to isolate the upload issue
-      setUploadProgress(100);
 
       // Notify parent component with file object
       onUploadComplete(result.filePath!, selectedFile.name, selectedFile.type, selectedFile.size, selectedFile);

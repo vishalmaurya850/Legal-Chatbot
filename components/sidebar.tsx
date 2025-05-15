@@ -73,7 +73,7 @@ export function Sidebar() {
   return (
     <div className="flex h-full w-64 flex-col border-r border-sky-100 bg-white">
      
-      <ScrollArea className="flex-1 px-2 py-4">
+      <ScrollArea className="flex-1 px-2 py-4 mt-10">
         <div className="space-y-1">
           <Link href="/chat">
             <Button
@@ -97,7 +97,7 @@ export function Sidebar() {
               Dashboard
             </Button>
           </Link>
-          <Link href="/documents">
+          {/* <Link href="/documents">
             <Button
               variant="ghost"
               className={`w-full justify-start ${
@@ -107,7 +107,7 @@ export function Sidebar() {
               <FileText className="mr-2 h-4 w-4" />
               Documents
             </Button>
-          </Link>
+          </Link> */}
           <Link href="/settings">
             <Button
               variant="ghost"

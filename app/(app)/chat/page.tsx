@@ -17,7 +17,7 @@ export default function ChatPage() {
     const createNewChat = async () => {
       try {
         // Check if there are any existing chats
-        const { data: existingChats, error: fetchError } = await supabase
+        const { error: fetchError } = await supabase
           .from("chat_sessions")
           .select("id")
           .eq("user_id", user.id)
@@ -27,10 +27,10 @@ export default function ChatPage() {
         if (fetchError) throw fetchError
 
         // If there are existing chats, redirect to the most recent one
-        if (existingChats && existingChats.length > 0) {
-          router.push(`/chat/${existingChats[0].id}`)
-          return
-        }
+        // if (existingChats && existingChats.length > 0) {
+        //   router.push(`/chat/${existingChats[0].id}`)
+        //   return
+        // }
 
         // Otherwise, stay on the "new" chat page
       } catch (error) {

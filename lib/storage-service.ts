@@ -10,6 +10,9 @@ export const SUPPORTED_DOCUMENT_TYPES = [
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "text/plain",
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
 ]
 
 export const SUPPORTED_AUDIO_TYPES = ["audio/wav", "audio/webm", "audio/mp3", "audio/mpeg"]
@@ -56,13 +59,11 @@ export async function uploadFile(
     const filePath = `${userId}/${fileName}`
 
     console.log(`Uploading file to bucket: ${bucket}, path: ${filePath}, userId: ${userId}`)
-    const { error: uploadError, data } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: file.type || "application/octet-stream",
-      })
+    const { error: uploadError, data } = await supabase.storage.from(bucket).upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || "application/octet-stream",
+    })
 
     if (uploadError) {
       console.error("Storage upload error:", uploadError)
@@ -121,7 +122,7 @@ export async function uploadDocument(file: File, userId: string): Promise<Upload
   if (!SUPPORTED_DOCUMENT_TYPES.includes(file.type)) {
     return {
       success: false,
-      error: `Unsupported document format. Supported formats: PDF, DOC, DOCX, TXT`,
+      error: `Unsupported document format. Supported formats: PDF, DOC, DOCX, TXT, PNG, JPEG, JPG`,
     }
   }
 
@@ -133,19 +134,17 @@ export async function uploadDocument(file: File, userId: string): Promise<Upload
     }
 
     console.log("Inserting document record for user:", userId, "path:", uploadResult.filePath)
-    const { error: dbError } = await supabase
-      .from("documents")
-      .insert({
-        user_id: userId,
-        title: file.name,
-        file_path: uploadResult.filePath,
-        file_type: file.type,
-        file_size: file.size,
-        status: "pending",
-        message_id: null, // Set initially to null
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+    const { error: dbError } = await supabase.from("documents").insert({
+      user_id: userId,
+      title: file.name,
+      file_path: uploadResult.filePath,
+      file_type: file.type,
+      file_size: file.size,
+      status: "pending",
+      message_id: null, // Set initially to null
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
 
     if (dbError) {
       console.error("Error inserting document record:", dbError)

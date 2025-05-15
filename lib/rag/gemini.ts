@@ -35,7 +35,7 @@ const safetySettings = [
 // Initialize Gemini model
 const model = new ChatGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY!,
-  model: "models/gemini-2.5-pro-exp-03-25",
+  model: "models/gemini-2.0-flash-thinking-exp-1219",
   maxOutputTokens: 1024,
   temperature: 0.2,
   safetySettings,
