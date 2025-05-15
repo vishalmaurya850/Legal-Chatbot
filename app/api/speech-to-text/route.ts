@@ -49,8 +49,8 @@ export async function POST(request: Request) {
       .eq("id", user.id)
       .single();
 
-    if (userCheckError || !userExists) {
-      console.warn("User not found in public.users, creating record:", user.id, userCheckError);
+    if (!userExists) {
+      // console.warn("User not found in public.users, creating record:", user.id, userCheckError);
       const { error: insertError } = await supabase
         .from("users")
         .insert({
